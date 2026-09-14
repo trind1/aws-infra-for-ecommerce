@@ -123,5 +123,18 @@ module "monitoring" {
   project_name = var.project_name
   environment  = var.environment
 
-  # Log, alarm and notification inputs are added with this module.
+  alb_arn_suffix          = module.alb.load_balancer_arn_suffix
+  target_group_arn_suffix = module.alb.target_group_arn_suffix
+  autoscaling_group_name  = module.compute.autoscaling_group_name
+  db_instance_identifier  = module.database.db_instance_identifier
+
+  log_retention_days               = var.log_retention_days
+  alarm_actions                    = var.alarm_actions
+  alb_5xx_threshold                = var.alb_5xx_threshold
+  alb_unhealthy_host_threshold     = var.alb_unhealthy_host_threshold
+  asg_cpu_threshold                = var.asg_cpu_threshold
+  asg_in_service_threshold         = var.asg_in_service_threshold
+  rds_cpu_threshold                = var.rds_cpu_threshold
+  rds_free_storage_threshold_bytes = var.rds_free_storage_threshold_bytes
+  api_error_count_threshold        = var.api_error_count_threshold
 }

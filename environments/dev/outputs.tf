@@ -151,3 +151,13 @@ output "monitoring_metric_namespace" {
   description = "CloudWatch namespace used for application custom metrics."
   value       = module.monitoring.metric_namespace
 }
+
+output "monitoring_alarm_arns" {
+  description = "CloudWatch alarm ARNs keyed by monitored signal."
+  value       = module.monitoring.alarm_arns
+}
+
+output "monitoring_alarm_names" {
+  description = "CloudWatch alarm names keyed by monitored signal."
+  value       = module.monitoring.alarm_names
+}
