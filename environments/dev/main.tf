@@ -75,7 +75,21 @@ module "alb" {
   project_name = var.project_name
   environment  = var.environment
 
-  # Network, security-group and certificate inputs are added with this module.
+  vpc_id            = module.network.vpc_id
+  subnet_ids        = module.network.public_subnet_ids
+  security_group_id = module.security_groups.alb_security_group_id
+
+  target_port       = var.application_port
+  health_check_path = var.alb_health_check_path
+  listener_port     = var.alb_listener_port
+  certificate_arn   = module.certificates.alb_certificate_arn
+  ssl_policy        = var.alb_ssl_policy
+
+  origin_custom_header_name  = var.cloudfront_alb_header_name
+  origin_custom_header_value = var.cloudfront_alb_header_value
+
+  enable_deletion_protection = var.alb_deletion_protection
+  idle_timeout               = var.alb_idle_timeout_seconds
 }
 
 # ============================================================

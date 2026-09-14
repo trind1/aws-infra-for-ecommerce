@@ -92,9 +92,16 @@ variable "cloudfront_origin_prefix_list_id" {
 }
 
 variable "alb_listener_port" {
-  description = "Port exposed by the Application Load Balancer."
+  description = "HTTPS port exposed by the Application Load Balancer to CloudFront."
   type        = number
-  default     = 80
+  default     = 443
+  nullable    = false
+}
+
+variable "alb_ssl_policy" {
+  description = "TLS policy for the ALB HTTPS listener."
+  type        = string
+  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
   nullable    = false
 }
 
@@ -141,8 +148,8 @@ variable "cloudfront_alb_header_name" {
 variable "cloudfront_alb_header_value" {
   description = "Secret value for the private CloudFront-to-ALB header; supply it outside version control."
   type        = string
-  default     = null
   sensitive   = true
+  nullable    = false
 }
 
 # ============================================================
@@ -226,10 +233,15 @@ variable "cloudfront_price_class" {
 }
 
 variable "cloudfront_alb_origin_protocol_policy" {
-  description = "Protocol CloudFront uses to connect to the ALB origin."
+  description = "Protocol CloudFront uses to connect to the ALB origin; the current design requires HTTPS."
   type        = string
-  default     = "http-only"
+  default     = "https-only"
   nullable    = false
+
+  validation {
+    condition     = var.cloudfront_alb_origin_protocol_policy == "https-only"
+    error_message = "cloudfront_alb_origin_protocol_policy must be https-only."
+  }
 }
 
 # ============================================================

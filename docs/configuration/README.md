@@ -30,7 +30,7 @@ network
 | Network | [README](network/README.md) | CIDR, AZs | Security groups, ALB, compute, database |
 | Security groups | [README](security-groups/README.md) | VPC, ports, CloudFront prefix list | ALB, compute, database |
 | Certificates | [README](certificates/README.md) | ALB origin domain/certificate; viewer certificate `us-east-1` là optional/future | ALB, CloudFront |
-| ALB | [README](alb/README.md) | VPC, public subnets, ALB SG | Frontend, compute, monitoring |
+| ALB | [README](alb/README.md) | VPC, public subnets, ALB SG, regional ALB certificate, origin header | Frontend, compute, monitoring |
 | Frontend | [README](frontend/README.md) | ALB endpoint, certificates | Người dùng cuối |
 | Database | [README](database/README.md) | DB subnets, DB SG, secrets | Compute, monitoring |
 | Monitoring | [README](monitoring/README.md) | Tên/tài nguyên ALB, ASG, RDS | Compute và vận hành |
@@ -41,7 +41,7 @@ network
 1. `network` xuất VPC ID, public subnet IDs và database subnet IDs.
 2. `security-groups` nhận VPC ID, xuất ba security group IDs.
 3. `certificates` cung cấp certificate regional cho ALB origin HTTPS theo hostname origin đã chốt; certificate CloudFront `us-east-1` chỉ xuất hiện khi bật custom viewer domain trong tương lai.
-4. `alb` nhận public subnets và ALB SG; xuất target group, listener, DNS/ARN và metric suffixes.
+4. `alb` nhận public subnets, ALB SG, regional certificate và origin header; xuất target group, listener, DNS/ARN và metric suffixes.
 5. `monitoring` pha log foundation xuất tên log groups cho `compute`.
 6. `compute` nhận target group, app SG, database connection metadata và log groups; xuất ASG name.
 7. `database` xuất endpoint, port, identifier và log group metadata; credentials vẫn ở secret store.

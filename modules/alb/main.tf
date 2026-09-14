@@ -1,4 +1,5 @@
-# --- Internet-facing ALB and API target group ---
+# ============ INTERNET-FACING ALB  ============
+
 resource "aws_lb" "this" {
   name                       = local.alb_name
   internal                   = false
@@ -9,12 +10,14 @@ resource "aws_lb" "this" {
   drop_invalid_header_fields = true
   idle_timeout               = var.idle_timeout
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = local.alb_name
     Component = "alb"
     Tier      = "public"
-  })
+  }
 }
+
+# ============ API TARGET GROUP  ============
 
 resource "aws_lb_target_group" "api" {
   name        = local.target_group_name
@@ -35,20 +38,21 @@ resource "aws_lb_target_group" "api" {
     unhealthy_threshold = 3
   }
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = local.target_group_name
     Component = "alb"
     Tier      = "application"
-  })
+  }
 }
 
-# --- HTTPS listener and CloudFront-origin authorization rule ---
+# ============ HTTPS LISTENER  ============
+
 resource "aws_lb_listener" "api" {
   load_balancer_arn = aws_lb.this.arn
   port              = var.listener_port
-  protocol          = var.certificate_arn == null ? "HTTP" : "HTTPS"
+  protocol          = "HTTPS"
   certificate_arn   = var.certificate_arn
-  ssl_policy        = var.certificate_arn == null ? null : var.ssl_policy
+  ssl_policy        = var.ssl_policy
 
   default_action {
     type = "fixed-response"
@@ -60,11 +64,14 @@ resource "aws_lb_listener" "api" {
     }
   }
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = "${local.alb_name}-listener"
     Component = "alb"
-  })
+    Tier      = "public"
+  }
 }
+
+# ============ CLOUDFRONT API LISTENER RULE  ============
 
 resource "aws_lb_listener_rule" "api_from_cloudfront" {
   listener_arn = aws_lb_listener.api.arn
@@ -88,8 +95,9 @@ resource "aws_lb_listener_rule" "api_from_cloudfront" {
     target_group_arn = aws_lb_target_group.api.arn
   }
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = "${local.alb_name}-api-rule"
     Component = "alb"
-  })
+    Tier      = "public"
+  }
 }

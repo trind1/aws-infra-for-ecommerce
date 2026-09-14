@@ -72,7 +72,7 @@ output "alb_dns_name" {
 
 output "api_target_group_arn" {
   description = "ARN of the API target group used by the compute Auto Scaling Group."
-  value       = module.alb.api_target_group_arn
+  value       = module.alb.target_group_arn
 }
 
 # ============================================================

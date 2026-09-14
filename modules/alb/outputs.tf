@@ -4,12 +4,12 @@ output "alb_arn" {
 }
 
 output "alb_dns_name" {
-  description = "ALB DNS name used by CloudFront."
+  description = "ALB DNS name that CloudFront uses as the origin hostname."
   value       = aws_lb.this.dns_name
 }
 
 output "alb_zone_id" {
-  description = "ALB Route 53 zone ID."
+  description = "Canonical ELB zone ID for a future Route 53 alias; this module creates no DNS record."
   value       = aws_lb.this.zone_id
 }
 

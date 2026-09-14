@@ -14,12 +14,12 @@ variable "alb_origin_dns_name" {
 }
 
 variable "alb_origin_protocol_policy" {
-  description = "CloudFront-to-ALB protocol; HTTP is the explicit no-domain fallback."
+  description = "CloudFront-to-ALB protocol; the current environment design requires HTTPS."
   type        = string
 
   validation {
-    condition     = contains(["http-only", "https-only"], var.alb_origin_protocol_policy)
-    error_message = "alb_origin_protocol_policy must be http-only or https-only."
+    condition     = var.alb_origin_protocol_policy == "https-only"
+    error_message = "alb_origin_protocol_policy must be https-only for the current ALB design."
   }
 }
 
@@ -44,7 +44,7 @@ variable "cloudfront_price_class" {
 variable "origin_custom_header_name" {
   description = "Header name CloudFront sends to the ALB for origin authentication."
   type        = string
-  default     = "X-CloudFront-Origin-Verify"
+  default     = "X-Origin-Verify"
 }
 
 variable "origin_custom_header_value" {
