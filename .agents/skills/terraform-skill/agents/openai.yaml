@@ -1,0 +1,4 @@
+interface:
+  display_name: "Terraform Skill"
+  short_description: "Quy trình Terraform/OpenTofu an toàn"
+  default_prompt: "Dùng $terraform-skill để tạo, review, kiểm thử hoặc chẩn đoán Terraform/OpenTofu trong repository này."

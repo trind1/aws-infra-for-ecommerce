@@ -1,0 +1,297 @@
+data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
+data "aws_iam_policy_document" "ec2_assume_role" {
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+locals {
+  name                 = "${var.project_name}-${var.environment}"
+  instance_name        = "${local.name}-api"
+  role_name            = substr(replace(lower("${local.name}-api-role"), "/[^a-z0-9+=,.@_-]/", "-"), 0, 64)
+  instance_profile     = substr(replace(lower("${local.name}-api-profile"), "/[^a-z0-9+=,.@_-]/", "-"), 0, 128)
+  api_log_group_arn    = "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:${var.api_log_group_name}:*"
+  system_log_group_arn = "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:${var.system_log_group_name}:*"
+
+  cloudwatch_agent_config = jsonencode({
+    agent = {
+      metrics_collection_interval = 60
+      run_as_user                 = "root"
+    }
+    metrics = {
+      namespace = var.metrics_namespace
+      append_dimensions = {
+        AutoScalingGroupName = "$${aws:AutoScalingGroupName}"
+      }
+      metrics_collected = {
+        mem = {
+          measurement                 = ["mem_used_percent"]
+          metrics_collection_interval = 60
+        }
+        disk = {
+          resources                   = ["/"]
+          measurement                 = ["used_percent"]
+          metrics_collection_interval = 60
+        }
+      }
+    }
+    logs = {
+      logs_collected = {
+        files = {
+          collect_list = [
+            {
+              file_path       = "/var/log/${local.instance_name}/${var.api_log_file}"
+              log_group_name  = var.api_log_group_name
+              log_stream_name = "{instance_id}/application"
+            },
+            {
+              file_path       = "/var/log/cloud-init-output.log"
+              log_group_name  = var.system_log_group_name
+              log_stream_name = "{instance_id}/cloud-init"
+            }
+          ]
+        }
+      }
+    }
+  })
+}
+
+# --- IAM role and least-privilege runtime permissions ---
+resource "aws_iam_role" "api" {
+  name               = local.role_name
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+
+  tags = merge(var.tags, {
+    Name      = local.role_name
+    Component = "compute"
+    Tier      = "application"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.api.name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+data "aws_iam_policy_document" "cloudwatch" {
+  statement {
+    sid       = "WriteApplicationAndSystemLogs"
+    effect    = "Allow"
+    actions   = ["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"]
+    resources = [local.api_log_group_arn, local.system_log_group_arn]
+  }
+
+  statement {
+    sid       = "PublishInstanceMetrics"
+    effect    = "Allow"
+    actions   = ["cloudwatch:PutMetricData"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "cloudwatch:namespace"
+      values   = [var.metrics_namespace]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "cloudwatch" {
+  name   = "${local.name}-cloudwatch-agent"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.cloudwatch.json
+}
+
+data "aws_iam_policy_document" "artifact" {
+  count = var.api_artifact_s3_bucket != null && var.api_artifact_s3_key != null ? 1 : 0
+
+  statement {
+    sid       = "ReadApiArtifact"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["arn:${data.aws_partition.current.partition}:s3:::${var.api_artifact_s3_bucket}/${var.api_artifact_s3_key}"]
+  }
+}
+
+resource "aws_iam_role_policy" "artifact" {
+  count  = var.api_artifact_s3_bucket != null && var.api_artifact_s3_key != null ? 1 : 0
+  name   = "${local.name}-artifact-read"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.artifact[0].json
+}
+
+data "aws_iam_policy_document" "database_secret" {
+  count = var.database_credentials_secret_arn == null ? 0 : 1
+
+  statement {
+    sid       = "ReadDatabaseCredentials"
+    effect    = "Allow"
+    actions   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
+    resources = [var.database_credentials_secret_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "database_secret" {
+  count  = var.database_credentials_secret_arn == null ? 0 : 1
+  name   = "${local.name}-database-secret-read"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.database_secret[0].json
+}
+
+resource "aws_iam_instance_profile" "api" {
+  name = local.instance_profile
+  role = aws_iam_role.api.name
+
+  tags = merge(var.tags, {
+    Name      = local.instance_profile
+    Component = "compute"
+    Tier      = "application"
+  })
+}
+
+# --- Launch Template with IMDSv2, encrypted EBS and bootstrap ---
+resource "aws_launch_template" "api" {
+  name                   = "${local.name}-api-template"
+  image_id               = var.ami_id
+  instance_type          = var.instance_type
+  update_default_version = true
+  user_data = base64encode(templatefile("${path.module}/user_data.sh.tftpl", {
+    api_artifact_s3_bucket          = coalesce(var.api_artifact_s3_bucket, "")
+    api_artifact_s3_key             = coalesce(var.api_artifact_s3_key, "")
+    api_log_file                    = var.api_log_file
+    api_log_group_name              = var.api_log_group_name
+    api_start_command               = var.api_start_command
+    app_name                        = local.instance_name
+    app_port                        = var.app_port
+    cloudwatch_agent_config         = local.cloudwatch_agent_config
+    database_credentials_secret_arn = coalesce(var.database_credentials_secret_arn, "")
+    database_host                   = var.database_host
+    database_name                   = var.database_name
+    database_port                   = var.database_port
+    database_username               = var.database_username
+    environment                     = var.environment
+  }))
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.api.name
+  }
+
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups             = [var.security_group_id]
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      delete_on_termination = true
+      encrypted             = true
+      volume_size           = var.root_volume_size
+      volume_type           = "gp3"
+    }
+  }
+
+  metadata_options {
+    http_endpoint          = "enabled"
+    http_protocol_ipv6     = "disabled"
+    http_tokens            = "required"
+    instance_metadata_tags = "disabled"
+  }
+
+  monitoring {
+    enabled = var.detailed_monitoring
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(var.tags, {
+      Name      = local.instance_name
+      Component = "compute"
+      Tier      = "application"
+    })
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+    tags = merge(var.tags, {
+      Name      = "${local.instance_name}-volume"
+      Component = "compute"
+      Tier      = "application"
+    })
+  }
+
+  tags = merge(var.tags, {
+    Name      = "${local.name}-api-template"
+    Component = "compute"
+  })
+}
+
+# --- Auto Scaling Group and CPU target tracking ---
+resource "aws_autoscaling_group" "api" {
+  name                      = "${local.name}-api-asg"
+  min_size                  = var.min_size
+  desired_capacity          = var.desired_capacity
+  max_size                  = var.max_size
+  vpc_zone_identifier       = var.subnet_ids
+  target_group_arns         = [var.target_group_arn]
+  health_check_type         = "ELB"
+  health_check_grace_period = var.health_check_grace_period
+
+  launch_template {
+    id      = aws_launch_template.api.id
+    version = "$Latest"
+  }
+
+  instance_refresh {
+    strategy = "Rolling"
+
+    preferences {
+      min_healthy_percentage = 50
+      instance_warmup        = var.health_check_grace_period
+      skip_matching          = true
+    }
+  }
+
+  dynamic "tag" {
+    for_each = merge(var.tags, {
+      Name      = local.instance_name
+      Component = "compute"
+      Tier      = "application"
+    })
+
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = true
+    }
+  }
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [desired_capacity]
+  }
+}
+
+resource "aws_autoscaling_policy" "cpu" {
+  name                   = "${local.name}-api-cpu-target"
+  policy_type            = "TargetTrackingScaling"
+  autoscaling_group_name = aws_autoscaling_group.api.name
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+
+    target_value = var.cpu_target_value
+  }
+}

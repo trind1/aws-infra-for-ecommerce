@@ -1,0 +1,4 @@
+interface:
+  display_name: "Terraform Module Workflow"
+  short_description: "Terraform module, docs và evidence theo reference"
+  default_prompt: "Dùng $terraform-module-workflow để thiết kế module Terraform, viết checklist docs và kiểm chứng bằng evidence."

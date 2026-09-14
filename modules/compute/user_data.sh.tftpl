@@ -1,0 +1,88 @@
+#!/bin/bash
+set -euxo pipefail
+
+dnf install -y nodejs npm unzip
+
+if ! command -v aws >/dev/null 2>&1; then
+  dnf install -y awscli-2
+fi
+
+if ! command -v amazon-cloudwatch-agent-ctl >/dev/null 2>&1; then
+  dnf install -y amazon-cloudwatch-agent || true
+fi
+
+if ! command -v amazon-cloudwatch-agent-ctl >/dev/null 2>&1; then
+  curl --fail --silent --show-error --location \\
+    https://amazoncloudwatch-agent.s3.amazonaws.com/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm \\
+    --output /tmp/amazon-cloudwatch-agent.rpm
+  rpm -U /tmp/amazon-cloudwatch-agent.rpm
+fi
+
+id -u nodeapp >/dev/null 2>&1 || useradd --system --home-dir /opt/nodejs-api --shell /sbin/nologin nodeapp
+install -d -o nodeapp -g nodeapp /opt/nodejs-api /var/log/${app_name}
+
+if [[ -n "${api_artifact_s3_bucket}" && -n "${api_artifact_s3_key}" ]]; then
+  aws s3 cp "s3://${api_artifact_s3_bucket}/${api_artifact_s3_key}" /tmp/nodejs-api.zip
+  unzip -oq /tmp/nodejs-api.zip -d /opt/nodejs-api
+  if [[ -f /opt/nodejs-api/package-lock.json ]]; then
+    npm --prefix /opt/nodejs-api ci --omit=dev
+  elif [[ -f /opt/nodejs-api/package.json ]]; then
+    npm --prefix /opt/nodejs-api install --omit=dev
+  fi
+else
+  # A tiny health-only fallback keeps a fresh ASG target healthy until the real artifact is supplied.
+  cat > /opt/nodejs-api/server.js <<'NODE_SERVER'
+const http = require("http");
+const port = Number(process.env.PORT || 3000);
+http.createServer((request, response) => {
+  if (request.url === "/health" || request.url === "/api/health") {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ status: "ok" }));
+    return;
+  }
+  response.writeHead(404, { "content-type": "application/json" });
+  response.end(JSON.stringify({ error: "not_found" }));
+}).listen(port, "0.0.0.0");
+NODE_SERVER
+fi
+
+cat > /etc/nodejs-api.env <<'API_ENV'
+NODE_ENV=${environment}
+PORT=${app_port}
+DB_HOST=${database_host}
+DB_PORT=${database_port}
+DB_NAME=${database_name}
+DB_USER=${database_username}
+DB_CREDENTIALS_SECRET_ARN=${database_credentials_secret_arn}
+API_ENV
+
+chown -R nodeapp:nodeapp /opt/nodejs-api /var/log/${app_name}
+
+cat > /etc/systemd/system/nodejs-api.service <<'API_SERVICE'
+[Unit]
+Description=NodeJS API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nodeapp
+WorkingDirectory=/opt/nodejs-api
+EnvironmentFile=/etc/nodejs-api.env
+ExecStart=${api_start_command}
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/${app_name}/${api_log_file}
+StandardError=append:/var/log/${app_name}/${api_log_file}
+
+[Install]
+WantedBy=multi-user.target
+API_SERVICE
+
+systemctl daemon-reload
+systemctl enable --now nodejs-api.service
+
+cat > /opt/cloudwatch-agent.json <<'CW_CONFIG'
+${cloudwatch_agent_config}
+CW_CONFIG
+amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/cloudwatch-agent.json -s

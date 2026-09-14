@@ -1,0 +1,17 @@
+# Terraform working directory, provider cache and generated plans/state
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.plan
+crash.log
+crash.*.log
+
+# Local backend and variable files may contain account IDs or secrets
+backend.hcl
+*.tfvars
+!terraform.tfvars.example
+
+# Local tooling and editor files
+.DS_Store
+.vscode/
