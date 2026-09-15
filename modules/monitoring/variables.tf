@@ -93,7 +93,7 @@ variable "api_error_count_threshold" {
 }
 
 variable "alarm_actions" {
-  description = "Optional SNS or other alarm action ARNs."
+  description = "Optional SNS or other alarm action ARNs; an empty list keeps alarms enabled but disables notifications."
   type        = list(string)
   default     = []
   nullable    = false

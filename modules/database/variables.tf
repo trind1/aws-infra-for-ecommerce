@@ -135,9 +135,3 @@ variable "log_retention_in_days" {
   type        = number
   default     = 30
 }
-
-variable "tags" {
-  description = "Common tags applied to taggable database resources."
-  type        = map(string)
-  default     = {}
-}

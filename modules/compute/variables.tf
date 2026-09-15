@@ -140,9 +140,3 @@ variable "database_credentials_secret_arn" {
   type        = string
   default     = null
 }
-
-variable "tags" {
-  description = "Common tags applied to taggable compute resources."
-  type        = map(string)
-  default     = {}
-}

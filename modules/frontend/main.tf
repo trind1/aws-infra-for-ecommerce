@@ -1,3 +1,5 @@
+# ============ CLOUDFRONT MANAGED POLICIES  ============
+
 data "aws_cloudfront_cache_policy" "s3_optimized" {
   name = "Managed-CachingOptimized"
 }
@@ -10,22 +12,27 @@ data "aws_cloudfront_origin_request_policy" "api_all_viewer_except_host" {
   name = "Managed-AllViewerExceptHostHeader"
 }
 
+# ============ FRONTEND NAMING  ============
+
 locals {
   name          = "${var.project_name}-${var.environment}"
   bucket_prefix = substr(replace(lower("${local.name}-frontend"), "/[^a-z0-9-]/", "-"), 0, 37)
 }
 
-# --- Private frontend artifact storage ---
+# ============ PRIVATE FRONTEND BUCKET  ============
+
 resource "aws_s3_bucket" "frontend" {
   bucket_prefix = "${local.bucket_prefix}-"
   force_destroy = var.bucket_force_destroy
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = "${local.name}-frontend"
     Component = "frontend"
     Tier      = "frontend"
-  })
+  }
 }
+
+# ============ FRONTEND BUCKET PUBLIC ACCESS BLOCK  ============
 
 resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket = aws_s3_bucket.frontend.id
@@ -36,6 +43,8 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
   restrict_public_buckets = true
 }
 
+# ============ FRONTEND BUCKET OWNERSHIP  ============
+
 resource "aws_s3_bucket_ownership_controls" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
@@ -44,6 +53,8 @@ resource "aws_s3_bucket_ownership_controls" "frontend" {
   }
 }
 
+# ============ FRONTEND BUCKET VERSIONING  ============
+
 resource "aws_s3_bucket_versioning" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
@@ -51,6 +62,8 @@ resource "aws_s3_bucket_versioning" "frontend" {
     status = "Enabled"
   }
 }
+
+# ============ FRONTEND BUCKET ENCRYPTION  ============
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
   bucket = aws_s3_bucket.frontend.id
@@ -62,7 +75,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
   }
 }
 
-# --- CloudFront Origin Access Control and distribution ---
+# ============ CLOUDFRONT ORIGIN ACCESS CONTROL  ============
+
 resource "aws_cloudfront_origin_access_control" "frontend" {
   name                              = "${local.name}-frontend-oac"
   description                       = "SigV4 access from CloudFront to the private frontend bucket."
@@ -70,6 +84,8 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
+
+# ============ CLOUDFRONT DISTRIBUTION  ============
 
 resource "aws_cloudfront_distribution" "this" {
   enabled             = true
@@ -136,12 +152,23 @@ resource "aws_cloudfront_distribution" "this" {
     ssl_support_method             = var.cloudfront_certificate_arn == null ? null : "sni-only"
   }
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = "${local.name}-cloudfront"
     Component = "frontend"
     Tier      = "edge"
-  })
+  }
+
+  lifecycle {
+    precondition {
+      condition = (length(var.cloudfront_aliases) == 0) == (
+        var.cloudfront_certificate_arn == null
+      )
+      error_message = "cloudfront_aliases and cloudfront_certificate_arn must be enabled together."
+    }
+  }
 }
+
+# ============ FRONTEND BUCKET POLICY  ============
 
 data "aws_iam_policy_document" "frontend_bucket" {
   statement {

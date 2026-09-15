@@ -6,7 +6,7 @@ Các tài liệu này chuyển kiến trúc trong [`docs/components/`](../compon
 
 - Mỗi module chỉ sở hữu một nhóm tài nguyên có trách nhiệm rõ ràng.
 - Environment composition truyền giá trị cụ thể và nối các output vào input; module không tự suy đoán hạ tầng bên ngoài.
-- Secret database, giá trị custom header và địa chỉ nhận cảnh báo không ghi trực tiếp trong mã hoặc tài liệu ví dụ.
+- Secret database, giá trị custom header và địa chỉ nhận cảnh báo không ghi trực tiếp trong mã hoặc tài liệu ví dụ. Database module nhận master password qua secret injection nhưng không tự tạo/đọc Secrets Manager secret.
 - Mọi output được tiêu thụ bởi module khác phải là contract ổn định, có mô tả rõ mục đích.
 
 ## Thứ tự cấu hình
@@ -31,8 +31,8 @@ network
 | Security groups | [README](security-groups/README.md) | VPC, ports, CloudFront prefix list | ALB, compute, database |
 | Certificates | [README](certificates/README.md) | ALB origin domain/certificate; viewer certificate `us-east-1` là optional/future | ALB, CloudFront |
 | ALB | [README](alb/README.md) | VPC, public subnets, ALB SG, regional ALB certificate, origin header | Frontend, compute, monitoring |
-| Frontend | [README](frontend/README.md) | ALB endpoint, certificates | Người dùng cuối |
-| Database | [README](database/README.md) | DB subnets, DB SG, secrets | Compute, monitoring |
+| Frontend | [README](frontend/README.md) | ALB origin hostname, HTTPS/header, optional viewer certificate | Người dùng cuối |
+| Database | [README](database/README.md) | DB subnets, DB SG, out-of-band credentials | Compute, monitoring |
 | Monitoring | [README](monitoring/README.md) | Tên/tài nguyên ALB, ASG, RDS | Compute và vận hành |
 | Compute | [README](compute/README.md) | Public subnets, app SG, target group, DB, log groups | ALB, monitoring |
 
@@ -42,11 +42,11 @@ network
 2. `security-groups` nhận VPC ID, xuất ba security group IDs.
 3. `certificates` cung cấp certificate regional cho ALB origin HTTPS theo hostname origin đã chốt; certificate CloudFront `us-east-1` chỉ xuất hiện khi bật custom viewer domain trong tương lai.
 4. `alb` nhận public subnets, ALB SG, regional certificate và origin header; xuất target group, listener, DNS/ARN và metric suffixes.
-5. `monitoring` pha log foundation xuất tên log groups cho `compute`.
-6. `compute` nhận target group, app SG, database connection metadata và log groups; xuất ASG name.
-7. `database` xuất endpoint, port, identifier và log group metadata; credentials vẫn ở secret store.
+5. Composition layer định nghĩa ASG naming contract ổn định cho monitoring alarms; `monitoring` sở hữu log foundation và xuất tên log groups cho `compute`.
+6. `compute` nhận target group, app SG, database connection metadata và monitoring log outputs; xuất ASG name.
+7. `database` xuất endpoint, port, identifier và log group metadata; không xuất credential value. Master password phải được inject ngoài mã nguồn và bảo vệ trong backend state.
 8. `monitoring` pha alarms nhận identity của ALB, ASG và RDS; không yêu cầu compute phụ thuộc ngược vào alarms.
-9. `frontend` dùng URL mặc định `*.cloudfront.net` và certificate mặc định của CloudFront ở giai đoạn hiện tại; nhận ALB origin domain/protocol HTTPS và header bí mật; custom viewer alias/certificate là optional/future.
+9. `frontend` dùng URL mặc định `*.cloudfront.net` và certificate mặc định của CloudFront ở giai đoạn hiện tại; nhận ALB origin hostname/protocol HTTPS và header bí mật; custom viewer alias/certificate là optional/future.
 
 ## Kiểm tra thiết kế trước khi áp dụng
 

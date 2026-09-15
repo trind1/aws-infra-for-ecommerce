@@ -70,7 +70,7 @@ Module ALB không tạo Route 53 hosted zone, alias record hoặc validation rec
 | Output | Consumer | Mục đích |
 |---|---|---|
 | `alb_arn` | Environment/vận hành | Nhận diện ALB. |
-| `alb_dns_name` | Frontend | Hostname origin của CloudFront; chỉ dùng khi certificate khớp hostname. |
+| `alb_dns_name` | Environment/vận hành | DNS name AWS cấp cho ALB; origin hostname HTTPS có thể được quản lý riêng. |
 | `alb_zone_id` | DNS tương lai | Canonical ELB zone ID cho alias; không phải hosted zone ID do module tạo. |
 | `target_group_arn` | Compute | Đăng ký instances/ASG vào API target group. |
 | `listener_arn`, `listener_port` | Vận hành | Kiểm tra listener và port HTTPS. |

@@ -3,6 +3,9 @@ locals {
     Project     = var.project_name
     Environment = var.environment
   }
+
+  monitoring_name  = "${var.project_name}-${var.environment}"
+  compute_asg_name = "${local.monitoring_name}-api-asg"
 }
 
 # ============================================================
@@ -101,7 +104,18 @@ module "frontend" {
   project_name = var.project_name
   environment  = var.environment
 
-  # ALB origin, CloudFront and S3 inputs are added with this module.
+  alb_origin_dns_name        = var.alb_origin_domain
+  alb_origin_protocol_policy = var.cloudfront_alb_origin_protocol_policy
+
+  cloudfront_aliases = var.enable_custom_viewer_domain ? [
+    coalesce(var.cloudfront_viewer_domain, "")
+  ] : []
+  cloudfront_certificate_arn = module.certificates.cloudfront_certificate_arn
+  cloudfront_price_class     = var.cloudfront_price_class
+
+  origin_custom_header_name  = var.cloudfront_alb_header_name
+  origin_custom_header_value = var.cloudfront_alb_header_value
+  bucket_force_destroy       = var.frontend_bucket_force_destroy
 }
 
 # ============================================================
@@ -113,7 +127,32 @@ module "database" {
   project_name = var.project_name
   environment  = var.environment
 
-  # Database subnet, security-group and engine inputs are added with this module.
+  subnet_ids        = module.network.database_subnet_ids
+  security_group_id = module.security_groups.database_security_group_id
+
+  engine                = var.database_engine
+  engine_version        = var.database_engine_version
+  instance_class        = var.database_instance_class
+  allocated_storage     = var.database_allocated_storage_gib
+  max_allocated_storage = var.database_max_allocated_storage_gib
+  storage_type          = var.database_storage_type
+  database_name         = var.database_name
+  username              = var.database_username
+  password              = var.database_password
+  port                  = var.database_port
+
+  backup_retention_period    = var.database_backup_retention_days
+  backup_window              = var.database_backup_window
+  maintenance_window         = var.database_maintenance_window
+  deletion_protection        = var.database_deletion_protection
+  skip_final_snapshot        = var.database_skip_final_snapshot
+  final_snapshot_identifier  = var.database_final_snapshot_identifier
+  delete_automated_backups   = var.database_delete_automated_backups
+  apply_immediately          = var.database_apply_immediately
+  auto_minor_version_upgrade = var.database_auto_minor_version_upgrade
+
+  enabled_cloudwatch_logs_exports = var.database_enabled_cloudwatch_logs_exports
+  log_retention_in_days           = var.database_log_retention_days
 }
 
 # ============================================================
@@ -125,7 +164,34 @@ module "compute" {
   project_name = var.project_name
   environment  = var.environment
 
-  # Launch template, ASG, target-group, database and log inputs follow later.
+  ami_id                    = var.compute_ami_id
+  instance_type             = var.compute_instance_type
+  subnet_ids                = module.network.public_subnet_ids
+  security_group_id         = module.security_groups.application_security_group_id
+  target_group_arn          = module.alb.target_group_arn
+  app_port                  = var.application_port
+  root_volume_size          = var.compute_root_volume_size_gib
+  detailed_monitoring       = var.compute_detailed_monitoring
+  min_size                  = var.compute_min_size
+  desired_capacity          = var.compute_desired_capacity
+  max_size                  = var.compute_max_size
+  cpu_target_value          = var.compute_cpu_target_percent
+  health_check_grace_period = var.compute_health_check_grace_period_seconds
+
+  api_artifact_s3_bucket = var.application_artifact_bucket
+  api_artifact_s3_key    = var.application_artifact_key
+  api_start_command      = var.application_start_command
+  api_log_file           = var.application_log_file
+
+  api_log_group_name    = module.monitoring.api_log_group_name
+  system_log_group_name = module.monitoring.system_log_group_name
+  metrics_namespace     = module.monitoring.metric_namespace
+
+  database_host                   = module.database.db_address
+  database_port                   = module.database.db_port
+  database_name                   = var.database_name
+  database_username               = var.database_username
+  database_credentials_secret_arn = var.database_secret_arn
 }
 
 # ============================================================
@@ -139,7 +205,7 @@ module "monitoring" {
 
   alb_arn_suffix          = module.alb.load_balancer_arn_suffix
   target_group_arn_suffix = module.alb.target_group_arn_suffix
-  autoscaling_group_name  = module.compute.autoscaling_group_name
+  autoscaling_group_name  = local.compute_asg_name
   db_instance_identifier  = module.database.db_instance_identifier
 
   log_retention_days               = var.log_retention_days

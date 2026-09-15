@@ -15,7 +15,7 @@
 
 Tập trung log và alarm cho application, ALB, Auto Scaling Group và RDS. Module sở hữu CloudWatch log groups cho API/system log, application log metric filter và các metric alarms vận hành.
 
-Module không tạo SNS topic, dashboard, CloudWatch Agent trên EC2, RDS engine log groups hoặc ALB access logging tới S3. Notification action chỉ nhận ARN từ environment; module không suy đoán topic/account.
+Module không tạo SNS topic, dashboard, CloudWatch Agent trên EC2, RDS engine log groups hoặc ALB access logging tới S3. Notification action chỉ nhận ARN từ environment; module không suy đoán topic/account. Khi `alarm_actions = []`, alarms vẫn tồn tại để theo dõi nhưng notification actions được tắt.
 
 ## Dịch vụ và cấu hình
 
@@ -35,11 +35,11 @@ Module không tạo SNS topic, dashboard, CloudWatch Agent trên EC2, RDS engine
 |---|---|---|
 | ALB | `alb_arn_suffix` | `module.alb.load_balancer_arn_suffix` |
 | API target group | `target_group_arn_suffix` | `module.alb.target_group_arn_suffix` |
-| API Auto Scaling Group | `autoscaling_group_name` | `module.compute.autoscaling_group_name` |
+| API Auto Scaling Group | `autoscaling_group_name` | Composition ASG naming contract (`<project>-<environment>-api-asg`) |
 | RDS | `db_instance_identifier` | `module.database.db_instance_identifier` |
 | Environment | retention, thresholds, alarm actions | `var.*` của environment |
 
-Monitoring chỉ tham chiếu identity của upstream resources cho alarms. Không dùng alarm resource làm dependency để compute lấy tên log group; khi nối compute, composition phải giữ dependency graph một chiều hoặc dùng naming contract ổn định.
+Monitoring chỉ tham chiếu identity của upstream resources cho alarms. ASG name đi từ naming contract ổn định của composition; compute nhận log-group outputs của monitoring, tạo dependency graph một chiều và để log foundation sẵn sàng trước bootstrap.
 
 ## Input contract
 
@@ -73,6 +73,8 @@ Monitoring chỉ tham chiếu identity của upstream resources cho alarms. Khô
 | RDS free storage | `FreeStorageSpace` / 300 giây | 1 kỳ; `notBreaching` |
 | API errors | `ApplicationErrors` / 300 giây | 1 kỳ; `notBreaching` |
 
+Các alarm cũng khai báo `unit` tương ứng: `Count` cho count metrics, `Percent` cho CPU và `Bytes` cho free storage. Điều này giữ rõ contract giữa metric và threshold.
+
 ## Output contract
 
 - `api_log_group_name` và `system_log_group_name` cho CloudWatch Agent/compute.
@@ -84,6 +86,7 @@ Monitoring chỉ tham chiếu identity của upstream resources cho alarms. Khô
 - Log retention hữu hạn; không để log vô hạn ngoài chủ đích.
 - Không đưa secret, database password hoặc token vào log pattern, alarm description, variable default hay output.
 - Alarm actions là ARN tham chiếu, không phải credential; không hard-code account/topic.
+- `alarm_actions` rỗng không làm mất alarm; chỉ tắt việc gửi notification cho đến khi environment truyền ARN hợp lệ.
 - Metric dimension phải khớp metric thực tế; custom API metric không có dimension nếu metric filter không khai báo dimension.
 
 ## Điều kiện chấp nhận
@@ -91,7 +94,16 @@ Monitoring chỉ tham chiếu identity của upstream resources cho alarms. Khô
 - Compute có thể nhận tên log group mà không phụ thuộc vào alarm resources.
 - ALB, ASG, RDS alarms dùng đúng namespace, metric và dimensions.
 - Alarm API sử dụng custom metric do filter tạo ra và không có dimension thừa.
+- Alarm chỉ bật actions khi có ít nhất một ARN trong `alarm_actions`; SNS topic/subscription nằm ngoài boundary module.
 - Retention và thresholds đi từ environment, không hard-code ở resource.
+
+## Tài liệu tham chiếu
+
+- [Application Load Balancer CloudWatch metrics](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-cloudwatch-metrics.html) — metric names, statistics và dimensions `LoadBalancer`/`TargetGroup`.
+- [Amazon EC2 Auto Scaling CloudWatch metrics](https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-metrics.html) — dimension `AutoScalingGroupName` và metric `GroupInServiceInstances`.
+- [Amazon RDS CloudWatch dimensions](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/dimensions.html) — dimension `DBInstanceIdentifier`.
+- [CloudWatch Logs filter pattern syntax](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html) — pattern optional terms cho metric filter API errors.
+- [Terraform Registry: `aws_cloudwatch_metric_alarm`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) — contract của `unit`, `actions_enabled`, `alarm_actions` và `treat_missing_data`.
 
 ## Implementation checklist
 
@@ -99,10 +111,10 @@ Monitoring chỉ tham chiếu identity của upstream resources cho alarms. Khô
 |---:|---|---|---|---|---|
 | 1 | Boundary và non-goals | Implemented | `modules/monitoring/README.md:11` | Đối chiếu boundary — Pass | Không tạo SNS, dashboard, agent hoặc RDS log groups |
 | 2 | Input contract không dùng `tags` variable | Implemented | `modules/monitoring/variables.tf:1` | `terraform fmt -check modules/monitoring environments/dev/main.tf environments/dev/outputs.tf environments/dev/variables.tf` — exit 0 | Common tags do provider `default_tags` quản lý |
-| 3 | API/system CloudWatch log groups | Implemented | `modules/monitoring/main.tf:10` | `terraform -chdir=environments/dev validate` — Blocked bởi required arguments của `module.alb` | Output cho compute/CloudWatch Agent |
-| 4 | ALB, ASG, RDS metric alarms | Implemented | `modules/monitoring/main.tf:34` | `terraform -chdir=environments/dev validate` — Blocked bởi required arguments của `module.alb` | Dimensions lấy từ upstream outputs |
-| 5 | API metric filter và alarm | Implemented | `modules/monitoring/main.tf:149` | `terraform -chdir=environments/dev validate` — Blocked bởi required arguments của `module.alb` | Không dùng `LogGroupName` dimension sai |
+| 3 | API/system CloudWatch log groups | Implemented | `modules/monitoring/main.tf:10` | `terraform -chdir=environments/dev validate` — Blocked bởi AWS provider plugin handshake failure | Output cho compute/CloudWatch Agent |
+| 4 | ALB, ASG, RDS metric alarms | Implemented | `modules/monitoring/main.tf:35` | `terraform -chdir=environments/dev validate` — Blocked bởi AWS provider plugin handshake failure | Namespace, dimensions, unit và missing-data policy đã khai báo |
+| 5 | API metric filter và alarm | Implemented | `modules/monitoring/main.tf:162` | `terraform -chdir=environments/dev validate` — Blocked bởi AWS provider plugin handshake failure | Không dùng `LogGroupName` dimension sai |
 | 6 | Output log groups, namespace và alarms | Implemented | `modules/monitoring/outputs.tf:1` | `terraform fmt -check modules/monitoring environments/dev/main.tf environments/dev/outputs.tf environments/dev/variables.tf` — exit 0 | Re-export ở environment |
-| 7 | Environment wiring | Implemented | `environments/dev/main.tf:120` | `terraform -chdir=environments/dev validate` — Blocked bởi required arguments của `module.alb` | Đã nối ALB/compute/database outputs |
-| 8 | HCL formatting | Validated | `modules/monitoring/main.tf:1`, `environments/dev/main.tf:120` | `terraform fmt -check modules/monitoring environments/dev/main.tf environments/dev/outputs.tf environments/dev/variables.tf` — exit 0 | Không chạy apply/plan trong scope này |
-| 9 | Root composition validation | Blocked | `environments/dev/main.tf:72` | `terraform -chdir=environments/dev validate` — thiếu required arguments của `module.alb` | Cần hoàn thiện ALB wiring rồi chạy lại |
+| 7 | Environment wiring | Implemented | `environments/dev/main.tf:200` | `terraform -chdir=environments/dev validate` — Blocked bởi AWS provider plugin handshake failure | Đã nối ALB/database identities và composition ASG naming contract |
+| 8 | HCL formatting | Validated | `modules/monitoring/main.tf:1`, `environments/dev/main.tf:200` | `terraform fmt -check modules/monitoring environments/dev/main.tf environments/dev/outputs.tf environments/dev/variables.tf` — exit 0 | Không chạy apply/plan trong scope này |
+| 9 | Root composition validation | Blocked | `environments/dev/main.tf:1` | `terraform -chdir=environments/dev validate` — AWS provider plugin handshake failure | Cần môi trường provider hoạt động để xác minh graph toàn composition |

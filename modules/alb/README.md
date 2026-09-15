@@ -83,7 +83,7 @@ Module không nhận `tags`. Provider của environment áp dụng `default_tags
 | Output | Consumer | Ý nghĩa |
 |---|---|---|
 | `alb_arn` | Environment, vận hành | ARN của ALB. |
-| `alb_dns_name` | Frontend/CloudFront | Hostname ALB mà CloudFront sẽ dùng làm origin; phải đi cùng phương án certificate/DNS hợp lệ. |
+| `alb_dns_name` | Environment/vận hành | DNS name AWS cấp cho ALB; HTTPS origin hostname có thể được quản lý riêng để khớp certificate. |
 | `alb_zone_id` | DNS tương lai | Canonical ELB zone ID cho alias nếu sau này cần; module không tạo Route 53 record. |
 | `target_group_arn` | Compute | Target group để ASG đăng ký EC2. |
 | `target_group_arn_suffix` | Monitoring | Dimension `TargetGroup` của CloudWatch. |

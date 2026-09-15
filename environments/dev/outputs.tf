@@ -66,7 +66,7 @@ output "alb_arn" {
 }
 
 output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer."
+  description = "AWS-assigned DNS name of the Application Load Balancer; HTTPS origin hostname is managed separately."
   value       = module.alb.alb_dns_name
 }
 
@@ -80,7 +80,12 @@ output "api_target_group_arn" {
 # ============================================================
 output "frontend_bucket_id" {
   description = "ID of the private S3 bucket that stores frontend assets."
-  value       = module.frontend.frontend_bucket_id
+  value       = module.frontend.bucket_id
+}
+
+output "frontend_bucket_arn" {
+  description = "ARN of the private S3 bucket that stores frontend assets."
+  value       = module.frontend.bucket_arn
 }
 
 output "cloudfront_distribution_id" {
@@ -88,9 +93,19 @@ output "cloudfront_distribution_id" {
   value       = module.frontend.cloudfront_distribution_id
 }
 
+output "cloudfront_distribution_arn" {
+  description = "ARN of the CloudFront distribution serving the frontend."
+  value       = module.frontend.cloudfront_distribution_arn
+}
+
 output "cloudfront_domain_name" {
   description = "Default CloudFront domain name for the frontend distribution."
   value       = module.frontend.cloudfront_domain_name
+}
+
+output "frontend_origin_access_control_id" {
+  description = "ID of the Origin Access Control used by CloudFront for the private frontend bucket."
+  value       = module.frontend.origin_access_control_id
 }
 
 # ============================================================
@@ -99,6 +114,11 @@ output "cloudfront_domain_name" {
 output "autoscaling_group_name" {
   description = "Name of the API Auto Scaling Group."
   value       = module.compute.autoscaling_group_name
+}
+
+output "autoscaling_group_arn" {
+  description = "ARN of the API Auto Scaling Group."
+  value       = module.compute.autoscaling_group_arn
 }
 
 output "launch_template_id" {
@@ -111,27 +131,47 @@ output "compute_instance_role_arn" {
   value       = module.compute.instance_role_arn
 }
 
+output "compute_instance_profile_name" {
+  description = "Name of the instance profile assigned to API instances."
+  value       = module.compute.instance_profile_name
+}
+
 # ============================================================
 # DATABASE
 # ============================================================
 output "rds_arn" {
   description = "ARN of the RDS database instance."
-  value       = module.database.rds_arn
+  value       = module.database.db_instance_arn
 }
 
 output "rds_identifier" {
   description = "Identifier of the RDS database instance."
-  value       = module.database.rds_identifier
+  value       = module.database.db_instance_identifier
 }
 
 output "rds_endpoint" {
   description = "Endpoint of the RDS database instance for application configuration."
-  value       = module.database.rds_endpoint
+  value       = module.database.db_endpoint
 }
 
 output "rds_port" {
   description = "Port of the RDS database instance."
-  value       = module.database.rds_port
+  value       = module.database.db_port
+}
+
+output "rds_address" {
+  description = "DNS address of the RDS database instance without the port."
+  value       = module.database.db_address
+}
+
+output "rds_subnet_group_name" {
+  description = "Name of the RDS DB subnet group."
+  value       = module.database.db_subnet_group_name
+}
+
+output "rds_log_group_names" {
+  description = "RDS engine log group names keyed by exported log type."
+  value       = module.database.rds_log_group_names
 }
 
 # ============================================================

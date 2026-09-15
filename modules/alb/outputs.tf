@@ -4,7 +4,7 @@ output "alb_arn" {
 }
 
 output "alb_dns_name" {
-  description = "ALB DNS name that CloudFront uses as the origin hostname."
+  description = "AWS-assigned ALB DNS name; the HTTPS origin hostname may be managed separately."
   value       = aws_lb.this.dns_name
 }
 

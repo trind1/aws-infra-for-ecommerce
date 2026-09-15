@@ -1,7 +1,10 @@
+# ============ DATA SOURCES  ============
+
 data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
+# ============ IAM TRUST POLICY  ============
 data "aws_iam_policy_document" "ec2_assume_role" {
   statement {
     effect = "Allow"
@@ -15,6 +18,7 @@ data "aws_iam_policy_document" "ec2_assume_role" {
   }
 }
 
+# ============ COMPUTE LOCALS  ============
 locals {
   name                 = "${var.project_name}-${var.environment}"
   instance_name        = "${local.name}-api"
@@ -66,23 +70,25 @@ locals {
   })
 }
 
-# --- IAM role and least-privilege runtime permissions ---
+# ============ IAM ROLE  ============
 resource "aws_iam_role" "api" {
   name               = local.role_name
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = local.role_name
     Component = "compute"
     Tier      = "application"
-  })
+  }
 }
 
+# ============ SSM INSTANCE MANAGEMENT  ============
 resource "aws_iam_role_policy_attachment" "ssm" {
   role       = aws_iam_role.api.name
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# ============ CLOUDWATCH IAM POLICY  ============
 data "aws_iam_policy_document" "cloudwatch" {
   statement {
     sid       = "WriteApplicationAndSystemLogs"
@@ -111,6 +117,7 @@ resource "aws_iam_role_policy" "cloudwatch" {
   policy = data.aws_iam_policy_document.cloudwatch.json
 }
 
+# ============ OPTIONAL ARTIFACT IAM POLICY  ============
 data "aws_iam_policy_document" "artifact" {
   count = var.api_artifact_s3_bucket != null && var.api_artifact_s3_key != null ? 1 : 0
 
@@ -129,6 +136,7 @@ resource "aws_iam_role_policy" "artifact" {
   policy = data.aws_iam_policy_document.artifact[0].json
 }
 
+# ============ OPTIONAL DATABASE SECRET IAM POLICY  ============
 data "aws_iam_policy_document" "database_secret" {
   count = var.database_credentials_secret_arn == null ? 0 : 1
 
@@ -147,18 +155,19 @@ resource "aws_iam_role_policy" "database_secret" {
   policy = data.aws_iam_policy_document.database_secret[0].json
 }
 
+# ============ EC2 INSTANCE PROFILE  ============
 resource "aws_iam_instance_profile" "api" {
   name = local.instance_profile
   role = aws_iam_role.api.name
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = local.instance_profile
     Component = "compute"
     Tier      = "application"
-  })
+  }
 }
 
-# --- Launch Template with IMDSv2, encrypted EBS and bootstrap ---
+# ============ EC2 LAUNCH TEMPLATE  ============
 resource "aws_launch_template" "api" {
   name                   = "${local.name}-api-template"
   image_id               = var.ami_id
@@ -214,29 +223,29 @@ resource "aws_launch_template" "api" {
 
   tag_specifications {
     resource_type = "instance"
-    tags = merge(var.tags, {
+    tags = {
       Name      = local.instance_name
       Component = "compute"
       Tier      = "application"
-    })
+    }
   }
 
   tag_specifications {
     resource_type = "volume"
-    tags = merge(var.tags, {
+    tags = {
       Name      = "${local.instance_name}-volume"
       Component = "compute"
       Tier      = "application"
-    })
+    }
   }
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = "${local.name}-api-template"
     Component = "compute"
-  })
+  }
 }
 
-# --- Auto Scaling Group and CPU target tracking ---
+# ============ AUTO SCALING GROUP  ============
 resource "aws_autoscaling_group" "api" {
   name                      = "${local.name}-api-asg"
   min_size                  = var.min_size
@@ -249,7 +258,7 @@ resource "aws_autoscaling_group" "api" {
 
   launch_template {
     id      = aws_launch_template.api.id
-    version = "$Latest"
+    version = aws_launch_template.api.latest_version
   }
 
   instance_refresh {
@@ -263,11 +272,11 @@ resource "aws_autoscaling_group" "api" {
   }
 
   dynamic "tag" {
-    for_each = merge(var.tags, {
+    for_each = {
       Name      = local.instance_name
       Component = "compute"
       Tier      = "application"
-    })
+    }
 
     content {
       key                 = tag.key
@@ -277,11 +286,11 @@ resource "aws_autoscaling_group" "api" {
   }
 
   lifecycle {
-    create_before_destroy = true
-    ignore_changes        = [desired_capacity]
+    ignore_changes = [desired_capacity]
   }
 }
 
+# ============ CPU TARGET TRACKING  ============
 resource "aws_autoscaling_policy" "cpu" {
   name                   = "${local.name}-api-cpu-target"
   policy_type            = "TargetTrackingScaling"

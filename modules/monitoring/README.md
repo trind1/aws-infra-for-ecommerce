@@ -21,7 +21,7 @@ RDS engine log groups thuộc module `database`. ALB access logging tới S3, SN
 
 ## Hành vi và boundary
 
-Module nhận các identity/suffix của ALB, target group, ASG và RDS từ composition layer. Module không tự tìm resource bằng data source và không tạo notification topic. `alarm_actions` chỉ là danh sách ARN được truyền vào; có thể để `[]` nếu chưa cấu hình kênh cảnh báo.
+Module nhận các identity/suffix của ALB, target group, ASG và RDS từ composition layer. Module không tự tìm resource bằng data source và không tạo notification topic. `alarm_actions` chỉ là danh sách ARN được truyền vào; khi để `[]`, alarms vẫn được tạo và theo dõi nhưng notification actions được tắt cho đến khi environment cung cấp ARN.
 
 Common tags được áp dụng ở provider `default_tags`; module không có `tags` variable. Module chỉ thêm tags riêng cho log groups như `Name`, `Component` và `Tier`.
 
@@ -57,6 +57,8 @@ Common tags được áp dụng ở provider `default_tags`; module không có `
 
 Metric filter tạo custom metric không có dimension. Vì vậy alarm API cũng không gắn `LogGroupName` dimension; dimension đó sẽ không khớp metric được tạo bởi filter hiện tại.
 
+Mỗi alarm khai báo rõ `unit` (`Count`, `Percent` hoặc `Bytes`) để CloudWatch đánh giá đúng loại metric. Alarm chỉ gửi notification khi `alarm_actions` không rỗng; module không quản lý SNS topic hoặc subscription.
+
 ## Outputs
 
 | Output | Consumer / mục đích |
@@ -78,7 +80,7 @@ module "monitoring" {
 
   alb_arn_suffix          = module.alb.load_balancer_arn_suffix
   target_group_arn_suffix = module.alb.target_group_arn_suffix
-  autoscaling_group_name  = module.compute.autoscaling_group_name
+  autoscaling_group_name  = "${var.project_name}-${var.environment}-api-asg"
   db_instance_identifier  = module.database.db_instance_identifier
 
   log_retention_days           = var.log_retention_days
@@ -102,9 +104,9 @@ Khi compute cần tên log groups, composition không được tạo dependency 
 | 1 | Boundary và non-goals | Implemented | `modules/monitoring/README.md:11` | Chưa xác minh | Không tạo SNS, dashboard, agent hoặc RDS log groups |
 | 2 | Input contract không dùng `tags` variable | Implemented | `modules/monitoring/variables.tf:1` | Chưa xác minh | Common tags do provider `default_tags` quản lý |
 | 3 | API/system CloudWatch log groups | Implemented | `modules/monitoring/main.tf:10` | Chưa xác minh | Output cho compute/CloudWatch Agent |
-| 4 | ALB, ASG, RDS metric alarms | Implemented | `modules/monitoring/main.tf:34` | Chưa xác minh | Dimensions lấy từ upstream outputs |
-| 5 | API metric filter và alarm | Implemented | `modules/monitoring/main.tf:149` | Chưa xác minh | Không dùng `LogGroupName` dimension sai |
-| 6 | Output log groups, namespace và alarms | Implemented | `modules/monitoring/outputs.tf:1` | Chưa xác minh | Re-export ở environment |
-| 7 | Environment wiring | Implemented | `environments/dev/main.tf:120` | Chưa xác minh | Chờ ALB/compute/database identities |
-| 8 | HCL formatting | Validated | `modules/monitoring/main.tf:1`, `environments/dev/main.tf:120` | `terraform fmt -check modules/monitoring environments/dev/main.tf environments/dev/outputs.tf environments/dev/variables.tf` — exit 0 | Trong phạm vi module và wiring monitoring |
-| 9 | Root composition validation | Blocked | `environments/dev/main.tf:72` | `terraform -chdir=environments/dev validate` — thiếu required arguments của `module.alb` | Cần hoàn thiện ALB wiring rồi chạy lại |
+| 4 | ALB, ASG, RDS metric alarms | Implemented | `modules/monitoring/main.tf:35` | Chưa xác minh | Đúng namespace, dimensions, unit và missing-data policy |
+| 5 | API metric filter và alarm | Implemented | `modules/monitoring/main.tf:162` | `terraform -chdir=environments/dev validate` — Blocked bởi AWS provider plugin handshake failure | Không dùng `LogGroupName` dimension sai |
+| 6 | Output log groups, namespace và alarms | Implemented | `modules/monitoring/outputs.tf:1` | `terraform -chdir=environments/dev validate` — Blocked bởi AWS provider plugin handshake failure | Re-export ở environment |
+| 7 | Environment wiring | Implemented | `environments/dev/main.tf:200` | `terraform -chdir=environments/dev validate` — Blocked bởi AWS provider plugin handshake failure | Đã nối ALB/database identities và composition ASG naming contract |
+| 8 | HCL formatting | Validated | `modules/monitoring/main.tf:1`, `environments/dev/main.tf:200` | `terraform fmt -check modules/monitoring environments/dev/main.tf environments/dev/outputs.tf environments/dev/variables.tf` — exit 0 | Trong phạm vi module và wiring monitoring |
+| 9 | Root composition validation | Blocked | `environments/dev/main.tf:1` | `terraform -chdir=environments/dev validate` — AWS provider plugin handshake failure | Cần môi trường provider hoạt động để xác minh graph toàn composition |

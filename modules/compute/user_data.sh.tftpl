@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euxo pipefail
 
-dnf install -y nodejs npm unzip
+dnf install -y nodejs npm unzip curl
 
 if ! command -v aws >/dev/null 2>&1; then
   dnf install -y awscli-2
@@ -12,9 +12,7 @@ if ! command -v amazon-cloudwatch-agent-ctl >/dev/null 2>&1; then
 fi
 
 if ! command -v amazon-cloudwatch-agent-ctl >/dev/null 2>&1; then
-  curl --fail --silent --show-error --location \\
-    https://amazoncloudwatch-agent.s3.amazonaws.com/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm \\
-    --output /tmp/amazon-cloudwatch-agent.rpm
+  curl --fail --silent --show-error --location "https://amazoncloudwatch-agent.s3.amazonaws.com/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm" --output /tmp/amazon-cloudwatch-agent.rpm
   rpm -U /tmp/amazon-cloudwatch-agent.rpm
 fi
 

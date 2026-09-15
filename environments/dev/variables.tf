@@ -282,10 +282,31 @@ variable "database_max_allocated_storage_gib" {
   nullable    = false
 }
 
+variable "database_storage_type" {
+  description = "RDS storage type."
+  type        = string
+  default     = "gp3"
+  nullable    = false
+}
+
 variable "database_name" {
   description = "Initial database name."
   type        = string
   default     = "ecommerce"
+  nullable    = false
+}
+
+variable "database_username" {
+  description = "RDS master username."
+  type        = string
+  default     = "postgres"
+  nullable    = false
+}
+
+variable "database_password" {
+  description = "RDS master password supplied out-of-band; never commit this value."
+  type        = string
+  sensitive   = true
   nullable    = false
 }
 
@@ -297,7 +318,7 @@ variable "database_port" {
 }
 
 variable "database_secret_arn" {
-  description = "ARN of an existing secret that provides database credentials at runtime."
+  description = "Optional ARN of an existing secret for application runtime credentials; it does not configure the RDS master password."
   type        = string
   default     = null
 }
@@ -323,6 +344,54 @@ variable "database_skip_final_snapshot" {
   nullable    = false
 }
 
+variable "database_final_snapshot_identifier" {
+  description = "Optional final snapshot identifier when the final snapshot is enabled."
+  type        = string
+  default     = null
+}
+
+variable "database_backup_window" {
+  description = "UTC daily backup window for RDS."
+  type        = string
+  default     = "03:00-04:00"
+  nullable    = false
+}
+
+variable "database_maintenance_window" {
+  description = "UTC weekly maintenance window for RDS."
+  type        = string
+  default     = "sun:04:00-sun:05:00"
+  nullable    = false
+}
+
+variable "database_delete_automated_backups" {
+  description = "Whether automated RDS backups are deleted with the instance."
+  type        = bool
+  default     = true
+  nullable    = false
+}
+
+variable "database_apply_immediately" {
+  description = "Whether RDS modifications are applied immediately."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
+variable "database_auto_minor_version_upgrade" {
+  description = "Whether RDS may apply automatic minor engine version upgrades."
+  type        = bool
+  default     = true
+  nullable    = false
+}
+
+variable "database_enabled_cloudwatch_logs_exports" {
+  description = "RDS engine log types exported to CloudWatch Logs."
+  type        = list(string)
+  default     = []
+  nullable    = false
+}
+
 variable "database_log_retention_days" {
   description = "Number of days to retain RDS engine logs in CloudWatch Logs."
   type        = number
@@ -336,7 +405,6 @@ variable "database_log_retention_days" {
 variable "compute_ami_id" {
   description = "AMI ID used by the API Auto Scaling Group; it must be available in aws_region."
   type        = string
-  default     = null
 }
 
 variable "compute_instance_type" {
@@ -407,10 +475,18 @@ variable "application_artifact_key" {
   default     = null
 }
 
+variable "application_log_file" {
+  description = "Application log filename written by the API systemd service."
+  type        = string
+  default     = "application.log"
+  nullable    = false
+}
+
 variable "application_start_command" {
   description = "Command used by instance bootstrap to start the API."
   type        = string
-  default     = null
+  default     = "/usr/bin/node /opt/nodejs-api/server.js"
+  nullable    = false
 }
 
 # ============================================================
@@ -432,7 +508,7 @@ variable "log_retention_days" {
 }
 
 variable "alarm_actions" {
-  description = "ARNs of notification targets invoked when an alarm changes state."
+  description = "Optional ARNs of notification targets invoked when an alarm changes state; an empty list disables notifications."
   type        = list(string)
   default     = []
   nullable    = false

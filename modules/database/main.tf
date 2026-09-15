@@ -4,34 +4,34 @@ locals {
   subnet_group  = substr(replace(lower("${local.name}-db-subnet-group"), "/[^a-z0-9-]/", "-"), 0, 255)
 }
 
-# --- Private DB subnet group ---
+# ============ RDS DB SUBNET GROUP  ============
 resource "aws_db_subnet_group" "this" {
   name        = local.subnet_group
   description = "Private database subnets for ${local.name}."
   subnet_ids  = var.subnet_ids
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = local.subnet_group
     Component = "database"
     Tier      = "database"
-  })
+  }
 }
 
-# RDS writes its exported engine logs to these standard log group names.
+# ============ RDS CLOUDWATCH LOG GROUPS  ============
 resource "aws_cloudwatch_log_group" "rds" {
   for_each = toset(var.enabled_cloudwatch_logs_exports)
 
   name              = "/aws/rds/instance/${local.db_identifier}/${each.value}"
   retention_in_days = var.log_retention_in_days
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = "${local.name}-rds-${each.value}-logs"
     Component = "database"
     Tier      = "database"
-  })
+  }
 }
 
-# --- Single-AZ RDS instance ---
+# ============ SINGLE-AZ RDS INSTANCE  ============
 resource "aws_db_instance" "this" {
   identifier                      = local.db_identifier
   engine                          = var.engine
@@ -63,9 +63,9 @@ resource "aws_db_instance" "this" {
 
   depends_on = [aws_cloudwatch_log_group.rds]
 
-  tags = merge(var.tags, {
+  tags = {
     Name      = local.db_identifier
     Component = "database"
     Tier      = "database"
-  })
+  }
 }
