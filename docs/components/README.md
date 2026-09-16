@@ -1,27 +1,96 @@
 # Thành phần hạ tầng
 
-> Đây là kiến trúc mục tiêu. Các tài liệu trong [`docs/configuration/`](../configuration/README.md) là kế hoạch cấu hình theo từng module; chúng không khẳng định trạng thái HCL hiện tại.
+> Đây là sơ đồ kiến trúc theo cấu hình Terraform hiện tại. Sơ đồ mô tả topology và luồng truy cập; không khẳng định tài nguyên đã được `apply` trên AWS.
 
-## Kiến trúc dự kiến
+## Sơ đồ kiến trúc tổng thể
 
-```text
-Người dùng
-  │ HTTPS tới https://<distribution>.cloudfront.net
-  │ CloudFront mặc định dùng certificate do CloudFront cung cấp
-  ▼
-CloudFront ──OAC──► S3 private bucket (frontend tĩnh)
-  │ /api/* + custom origin header
-  │ HTTPS tới ALB origin domain
-  ▼
-ALB (public subnets) ──HTTP──► EC2 Auto Scaling Group (public subnets)
-                                      │ DB port
-                                      ▼
-                              RDS Single-AZ (private DB subnets)
+```mermaid
+flowchart LR
+    user["Người dùng<br/>Browser / Client"]
+    cloudfront["Amazon CloudFront<br/>HTTPS viewer<br/>HTTP → HTTPS redirect"]
+    frontend["Amazon S3<br/>Private frontend bucket<br/>OAC / SSE-S3"]
 
-CloudWatch nhận log/metric/alarm từ ALB, EC2/ASG, RDS và application.
+    user -->|"HTTPS"| cloudfront
+    cloudfront -->|"Default behavior<br/>OAC SigV4"| frontend
+
+    subgraph aws["AWS Region: us-east-1"]
+        acm["AWS Certificate Manager<br/>Regional certificate cho ALB<br/>Viewer certificate us-east-1: optional"]
+        ssm["AWS Systems Manager<br/>SSM Agent / IAM instance profile"]
+        cloudwatch["Amazon CloudWatch<br/>Logs • Metrics • Alarms"]
+        artifact["Optional API artifact S3<br/>Bucket/key nằm ngoài module này"]
+        secret["Optional database secret<br/>ARN được truyền từ environment"]
+
+        subgraph vpc["VPC 10.0.0.0/16"]
+            igw["Internet Gateway"]
+            security["Security Groups<br/>CloudFront prefix list → ALB-SG :443<br/>ALB-SG → EC2-SG :3000<br/>EC2-SG → RDS-SG :5432"]
+
+            subgraph public_tier["Public application tier — 2 Availability Zones"]
+                subgraph public_az1["Public Subnet 1 — AZ-1"]
+                    ec2_1["EC2 API instance 1<br/>NodeJS • public IPv4<br/>IMDSv2 • encrypted gp3"]
+                end
+                subgraph public_az2["Public Subnet 2 — AZ-2"]
+                    ec2_2["EC2 API instance 2<br/>NodeJS • public IPv4<br/>IMDSv2 • encrypted gp3"]
+                end
+                alb["Internet-facing ALB<br/>spans 2 public subnets<br/>HTTPS :443 • default 403"]
+                asg["Auto Scaling Group<br/>min 2 • desired 2 • max 4<br/>CPU target tracking"]
+            end
+
+            subgraph database_tier["Private database tier — 2 Database Subnets"]
+                subgraph database_az1["Private DB Subnet 1 — AZ-1"]
+                    db_subnet_1["DB subnet"]
+                end
+                subgraph database_az2["Private DB Subnet 2 — AZ-2"]
+                    db_subnet_2["DB subnet"]
+                end
+                rds["Amazon RDS PostgreSQL<br/>1 instance • Single-AZ<br/>private • encrypted"]
+            end
+        end
+    end
+
+    cloudfront -->|"/api/*<br/>HTTPS + X-Origin-Verify"| alb
+    alb -->|"HTTP :3000<br/>ALB health check /health"| ec2_1
+    alb -->|"HTTP :3000<br/>ALB health check /health"| ec2_2
+    ec2_1 -->|"TCP :5432"| rds
+    ec2_2 -->|"TCP :5432"| rds
+
+    ec2_1 -->|"Bootstrap / package / artifact"| igw
+    ec2_2 -->|"Bootstrap / package / artifact"| igw
+    alb -.->|"Internet path"| igw
+
+    acm -.->|"TLS certificate"| cloudfront
+    acm -.->|"TLS certificate"| alb
+    ssm -.->|"Managed instance access"| ec2_1
+    ssm -.->|"Managed instance access"| ec2_2
+    artifact -.->|"Optional ZIP download"| ec2_1
+    artifact -.->|"Optional ZIP download"| ec2_2
+    secret -.->|"Optional runtime reference"| ec2_1
+    secret -.->|"Optional runtime reference"| ec2_2
+
+    ec2_1 -->|"Application/system logs<br/>Memory/disk metrics"| cloudwatch
+    ec2_2 -->|"Application/system logs<br/>Memory/disk metrics"| cloudwatch
+    alb -->|"ALB metrics"| cloudwatch
+    asg -->|"ASG metrics"| cloudwatch
+    rds -->|"RDS metrics / optional logs"| cloudwatch
+
+    security -.->|"Ingress / egress boundary"| alb
+    security -.->|"Ingress / egress boundary"| ec2_1
+    security -.->|"Ingress / egress boundary"| ec2_2
+    security -.->|"Ingress boundary"| rds
+
+    classDef edge fill:#e0f2fe,stroke:#0284c7,color:#0c4a6e
+    classDef public fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef private fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef ops fill:#f3e8ff,stroke:#9333ea,color:#581c87
+    classDef security fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+
+    class user,cloudfront,frontend edge
+    class alb,ec2_1,ec2_2,asg,igw public
+    class db_subnet_1,db_subnet_2,rds private
+    class acm,ssm,cloudwatch,artifact,secret ops
+    class security security
 ```
 
-Kiến trúc không dùng NAT Gateway. EC2 API chạy trong public subnet để bootstrap và đi Internet qua Internet Gateway, nhưng application port chỉ được security group cho phép từ ALB. Viewer hiện tại dùng hostname mặc định `*.cloudfront.net`; custom viewer domain là cải tiến tương lai.
+Ghi chú: kiến trúc hiện tại không dùng NAT Gateway. EC2 API chạy trong public subnet và có public IPv4 để bootstrap/outbound qua Internet Gateway, nhưng application port `3000` không mở trực tiếp ra Internet. RDS có DB subnet group trải trên hai AZ nhưng chỉ chạy một instance Single-AZ. Viewer hiện tại dùng hostname mặc định `*.cloudfront.net`; custom viewer domain và certificate `us-east-1` là cải tiến tương lai.
 
 ## Cây tài liệu
 

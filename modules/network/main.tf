@@ -14,7 +14,6 @@ locals {
       availability_zone = var.availability_zones[index]
     }
   }
-
 }
 
 

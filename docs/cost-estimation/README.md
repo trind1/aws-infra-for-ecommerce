@@ -16,21 +16,6 @@ Muốn có con số cuối cùng, cần lưu lại URL/PDF của estimate sau kh
 
 AWS Pricing Calculator chỉ tính trên các thông tin đã nhập; AWS cho biết giá trong estimate lấy từ AWS Price List API và cho phép xem calculation, lưu share URL hoặc export CSV/PDF. Vì vậy, evidence của tài liệu gồm hai phần: **cấu hình Terraform cho các giá trị cố định** và **estimate artifact của Calculator cho giá/usage đã nhập**. Xem [tài liệu AWS Pricing Calculator](https://docs.aws.amazon.com/pricing-calculator/latest/userguide/what-is-pricing-calculator.html).
 
-### Cách sử dụng tài liệu
-
-1. Bắt đầu từ **Bản đồ nhận diện service** để biết cần tìm service nào trong Calculator.
-2. Xem **Phạm vi và giả định baseline** để biết Region, thời gian và usage mặc định.
-3. Dùng **Phiếu nhập nhanh** khi thao tác trực tiếp trên Calculator.
-4. Dùng **Cấu hình chi tiết theo service** khi Calculator mở thêm field hoặc validation.
-5. Dùng **Inventory Terraform và evidence** và **Bảng đối chiếu** để kiểm tra ngược kết quả.
-
-| Nhãn trong tài liệu | Ý nghĩa |
-|---|---|
-| **Terraform** | Giá trị cố định đọc được từ HCL, có link evidence nội bộ. |
-| **Baseline assumption** | Giá trị tạm dùng để nhập vì repository chưa có usage runtime. |
-| **Not configured** | Không chọn/không thêm component vì repository không tạo feature đó. |
-| **UI minimum** | Giá trị tối thiểu chỉ dùng khi Calculator bắt buộc field active; không có nghĩa hệ thống đang dùng feature. |
-
 ## 1. Bản đồ nhận diện service trên AWS Pricing Calculator
 
 Mở [AWS Pricing Calculator - Estimate](https://calculator.aws/#/estimate), chọn **Add service** và tìm theo cột **Tên cần tìm**. Đây là mapping giữa tên hiển thị cần nhận diện trong Calculator và cấu hình Terraform của repository:
