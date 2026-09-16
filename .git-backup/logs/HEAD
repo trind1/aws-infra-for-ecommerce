@@ -1,9 +1,0 @@
-0000000000000000000000000000000000000000 7af83ab689b73a6087ea058b739769606cedd15e trind1 <trind1@runsystem.net> 1789352071 +0700	commit (initial): first commit
-7af83ab689b73a6087ea058b739769606cedd15e 0000000000000000000000000000000000000000 trind1 <trind1@runsystem.net> 1789352071 +0700	Branch: renamed refs/heads/main to refs/heads/main
-7af83ab689b73a6087ea058b739769606cedd15e 7af83ab689b73a6087ea058b739769606cedd15e trind1 <trind1@runsystem.net> 1789352071 +0700	Branch: renamed refs/heads/main to refs/heads/main
-7af83ab689b73a6087ea058b739769606cedd15e 9823c546139ed3b6431c57d3f0ff87f8ef4d0469 trind1 <trind1@runsystem.net> 1789353599 +0700	commit: Initial Tree Directory
-9823c546139ed3b6431c57d3f0ff87f8ef4d0469 96524d914a50e2fafe21684ac0fbf661b487c6b3 trind1 <trind1@runsystem.net> 1789377932 +0700	commit: modules: network, sg, certificates
-96524d914a50e2fafe21684ac0fbf661b487c6b3 f5fc39ec6c113243c7e010c213dd8b10f01c0b5f trind1 <trind1@runsystem.net> 1789378429 +0700	commit: monitoring
-f5fc39ec6c113243c7e010c213dd8b10f01c0b5f 2654d6329303c0cfde6a5df771b8bf2b7ac96ed5 trind1 <trind1@runsystem.net> 1789379946 +0700	commit: alb
-2654d6329303c0cfde6a5df771b8bf2b7ac96ed5 86163c99771a24de84375f1addab1cd0ac7eac66 trind1 <trind1@runsystem.net> 1789436659 +0700	commit: complete module
-86163c99771a24de84375f1addab1cd0ac7eac66 dbe3132e3784b9682a5b0d6bad2c0054393ecd32 trind1 <trind1@runsystem.net> 1789442180 +0700	commit: cost-estimation

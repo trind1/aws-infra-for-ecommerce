@@ -86,11 +86,12 @@ terraform -chdir=environments/dev validate
 
 Một số input bắt buộc phải được cấp từ biến môi trường, CI secret hoặc file `.tfvars` local, gồm:
 
-- `cloudfront_origin_prefix_list_id`
 - `cloudfront_alb_header_value`
 - `alb_origin_domain`
 - `database_password`
 - `compute_ami_id`
+
+CloudFront origin-facing managed prefix list được Terraform tự động tra cứu theo AWS region hiện tại, nên không cần cung cấp `cloudfront_origin_prefix_list_id` thủ công.
 
 Không commit password, custom header value, credentials, state, plan hoặc file `terraform.tfvars`.
 

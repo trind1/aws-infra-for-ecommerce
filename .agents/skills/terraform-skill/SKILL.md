@@ -4,7 +4,7 @@ description: Use when writing, reviewing, or debugging Terraform/OpenTofu module
 license: Apache-2.0
 metadata:
   author: Anton Babenko
-  version: 1.17.1
+  version: 1.18.0
 ---
 
 # Terraform Skill for Claude
@@ -52,6 +52,7 @@ Never run `terraform destroy` (targeted or full) without first running `terrafor
 | **Bootstrap / orchestration misuse** | `null_resource` + `local-exec` for bootstrap, `remote-exec` for setup scripts, provisioner stdout leaking secrets in CI logs | [Code Patterns: Provisioners as Last Resort](references/code-patterns.md#provisioners-as-last-resort) |
 | **Navigation / safe-rename blind spots** | Cannot locate symbol defs/refs semantically, value-symbol rename done as blind text replace, grep-only refactor missing refs, hallucinated `rg` shim | [Code Intelligence](references/code-intelligence-lsp.md#terraform-ls-capability-matrix) |
 | **Cross-cloud / provider mapping** | "What's the Azure/GCP equivalent of X", picking a backend/auth model per cloud | [State Management: Cross-cloud equivalents](references/state-management.md#cross-cloud-equivalents) |
+| **Architecture evolution / extensibility** | Adding AZs or tiers requires parallel-list edits, resource address churn, consumer rewiring, or broad module rewrites | [Extensible Architecture](references/extensible-architecture.md) |
 
 ## When to Use This Skill
 
@@ -60,6 +61,20 @@ Never run `terraform destroy` (targeted or full) without first running `terrafor
 **Don't use for:** basic HCL syntax questions Claude already knows, provider API reference (link to docs), cloud-platform questions unrelated to Terraform/OpenTofu.
 
 ## Core Principles
+
+### Architecture Extensibility
+
+Design for plausible changes to the selected architecture without adding unused tiers or speculative abstractions. Before editing a module, identify the current topology, its consumers, and the state addresses that must remain stable.
+
+- Model repeated infrastructure with typed `map(object(...))` inputs keyed by stable logical identity, such as an AZ or tier name, rather than parallel lists joined by `count.index`.
+- Use `for_each` with semantic keys. A numeric key derived from a list index (`"1"`, `"2"`) is still positional identity and does not prevent churn when elements are reordered or removed.
+- Keep tier-specific behavior explicit when route targets or lifecycle differ. Do not hide IGW, NAT, endpoint, or isolated routing behind a generic dynamic abstraction unless real consumers need it.
+- Keep environment-specific choices in the composition layer. Reusable modules should accept topology inputs and expose stable role-based outputs; adding a tier should be additive where possible.
+- Treat input/output changes as a module API migration. Preserve existing outputs when consumers depend on them, add new outputs before removing old ones, and add `moved` blocks for resource address changes.
+- Validate collection cardinality, key alignment, AZ uniqueness, CIDR validity, and cross-tier CIDR overlap. Use `check` blocks or resource preconditions when a rule spans variables or depends on planned values.
+- Test architecture changes as transitions: current topology, one additional AZ, reordered input, removed member, and newly enabled tier. Confirm the plan has only intended creates, updates, and destroys.
+
+Read [Extensible Architecture](references/extensible-architecture.md) when a request changes subnet tiers, AZ count, routing modes, module inputs/outputs, or resource identity.
 
 ### Module Hierarchy
 
@@ -298,6 +313,6 @@ Progressive disclosure — essentials here, depth on demand:
 - [Security & Compliance](references/security-compliance.md) — trivy/checkov, secrets handling, compliance mappings
 - [State Management](references/state-management.md) — backends, locking, migration, multi-team, recovery
 - [Code Patterns](references/code-patterns.md) — block ordering, `count`/`for_each` deep dive, modern features, version management, locals
+- [Extensible Architecture](references/extensible-architecture.md) — stable topology modeling, tier/AZ expansion, API compatibility, and transition tests
 - [Code Intelligence](references/code-intelligence-lsp.md) - terraform-ls capabilities, position-anchored calls, manual rename, degradation gate
 - [Quick Reference](references/quick-reference.md) — command cheat sheets, flowcharts, troubleshooting
-

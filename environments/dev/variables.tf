@@ -1,5 +1,8 @@
+# Root environment variables grouped in the same order as environments/dev/main.tf.
+# Variable values and validation rules are unchanged; only their organization is standardized.
+
 # ============================================================
-# GENERAL
+# SHARED ENVIRONMENT CONTEXT
 # ============================================================
 variable "project_name" {
   description = "Project identifier used in resource names and tags."
@@ -23,7 +26,7 @@ variable "aws_region" {
 }
 
 # ============================================================
-# NETWORK
+# MODULE: NETWORK
 # ============================================================
 variable "vpc_cidr" {
   description = "CIDR block assigned to the VPC."
@@ -78,30 +81,12 @@ variable "database_subnet_cidrs" {
 }
 
 # ============================================================
-# SECURITY GROUPS AND APPLICATION LOAD BALANCER
+# MODULE: SECURITY GROUPS
 # ============================================================
-variable "cloudfront_origin_prefix_list_id" {
-  description = "ID of the CloudFront origin-facing managed prefix list in aws_region."
-  type        = string
-  nullable    = false
-
-  validation {
-    condition     = can(regex("^pl-[0-9a-f]+$", var.cloudfront_origin_prefix_list_id))
-    error_message = "cloudfront_origin_prefix_list_id must be a valid managed prefix list ID."
-  }
-}
-
 variable "alb_listener_port" {
   description = "HTTPS port exposed by the Application Load Balancer to CloudFront."
   type        = number
   default     = 443
-  nullable    = false
-}
-
-variable "alb_ssl_policy" {
-  description = "TLS policy for the ALB HTTPS listener."
-  type        = string
-  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
   nullable    = false
 }
 
@@ -112,48 +97,15 @@ variable "application_port" {
   nullable    = false
 }
 
-variable "alb_health_check_path" {
-  description = "HTTP path the ALB uses to determine application health."
-  type        = string
-  default     = "/health"
-  nullable    = false
-
-  validation {
-    condition     = startswith(var.alb_health_check_path, "/")
-    error_message = "alb_health_check_path must start with a slash (/)."
-  }
-}
-
-variable "alb_idle_timeout_seconds" {
-  description = "Idle timeout, in seconds, for the ALB."
+variable "database_port" {
+  description = "Port on which the RDS engine accepts connections."
   type        = number
-  default     = 60
-  nullable    = false
-}
-
-variable "alb_deletion_protection" {
-  description = "Whether deletion protection is enabled for the ALB."
-  type        = bool
-  default     = false
-  nullable    = false
-}
-
-variable "cloudfront_alb_header_name" {
-  description = "Name of the private header CloudFront sends to the ALB origin."
-  type        = string
-  default     = "X-Origin-Verify"
-  nullable    = false
-}
-
-variable "cloudfront_alb_header_value" {
-  description = "Secret value for the private CloudFront-to-ALB header; supply it outside version control."
-  type        = string
-  sensitive   = true
+  default     = 5432
   nullable    = false
 }
 
 # ============================================================
-# CERTIFICATES AND FRONTEND
+# MODULE: CERTIFICATES
 # ============================================================
 variable "alb_origin_domain" {
   description = "Hostname CloudFront will use to connect to the ALB over HTTPS; must match the regional ALB certificate."
@@ -213,6 +165,59 @@ variable "cloudfront_certificate_ready" {
   nullable    = false
 }
 
+# ============================================================
+# MODULE: APPLICATION LOAD BALANCER
+# ============================================================
+variable "alb_ssl_policy" {
+  description = "TLS policy for the ALB HTTPS listener."
+  type        = string
+  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  nullable    = false
+}
+
+variable "alb_health_check_path" {
+  description = "HTTP path the ALB uses to determine application health."
+  type        = string
+  default     = "/health"
+  nullable    = false
+
+  validation {
+    condition     = startswith(var.alb_health_check_path, "/")
+    error_message = "alb_health_check_path must start with a slash (/)."
+  }
+}
+
+variable "alb_idle_timeout_seconds" {
+  description = "Idle timeout, in seconds, for the ALB."
+  type        = number
+  default     = 60
+  nullable    = false
+}
+
+variable "alb_deletion_protection" {
+  description = "Whether deletion protection is enabled for the ALB."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
+variable "cloudfront_alb_header_name" {
+  description = "Name of the private header CloudFront sends to the ALB origin."
+  type        = string
+  default     = "X-Origin-Verify"
+  nullable    = false
+}
+
+variable "cloudfront_alb_header_value" {
+  description = "Secret value for the private CloudFront-to-ALB header; supply it outside version control."
+  type        = string
+  sensitive   = true
+  nullable    = false
+}
+
+# ============================================================
+# MODULE: FRONTEND
+# ============================================================
 variable "frontend_bucket_force_destroy" {
   description = "Whether frontend bucket objects are deleted automatically with the bucket."
   type        = bool
@@ -245,7 +250,7 @@ variable "cloudfront_alb_origin_protocol_policy" {
 }
 
 # ============================================================
-# DATABASE
+# MODULE: DATABASE
 # ============================================================
 variable "database_engine" {
   description = "Database engine for the RDS instance."
@@ -307,13 +312,6 @@ variable "database_password" {
   description = "RDS master password supplied out-of-band; never commit this value."
   type        = string
   sensitive   = true
-  nullable    = false
-}
-
-variable "database_port" {
-  description = "Port on which the RDS engine accepts connections."
-  type        = number
-  default     = 5432
   nullable    = false
 }
 
@@ -400,7 +398,7 @@ variable "database_log_retention_days" {
 }
 
 # ============================================================
-# COMPUTE
+# MODULE: COMPUTE
 # ============================================================
 variable "compute_ami_id" {
   description = "AMI ID used by the API Auto Scaling Group; it must be available in aws_region."
@@ -490,7 +488,7 @@ variable "application_start_command" {
 }
 
 # ============================================================
-# MONITORING
+# MODULE: MONITORING
 # ============================================================
 variable "log_retention_days" {
   description = "Number of days to retain API and system logs in CloudWatch Logs."

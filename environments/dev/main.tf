@@ -8,6 +8,11 @@ locals {
   compute_asg_name = "${local.monitoring_name}-api-asg"
 }
 
+# AWS maintains this prefix list in the current provider region.
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
 # ============================================================
 # MODULE: NETWORK
 # ============================================================
@@ -35,7 +40,7 @@ module "security_groups" {
   environment  = var.environment
 
   vpc_id                           = module.network.vpc_id
-  cloudfront_origin_prefix_list_id = var.cloudfront_origin_prefix_list_id
+  cloudfront_origin_prefix_list_id = data.aws_ec2_managed_prefix_list.cloudfront.id
   alb_listener_port                = var.alb_listener_port
   application_port                 = var.application_port
   database_port                    = var.database_port

@@ -1,5 +1,5 @@
 locals {
-  name = "${var.project_name}-${var.environment}"
+  name_prefix = "${var.project_name}-${var.environment}"
 
   public_subnets = {
     for index, cidr in var.public_subnet_cidrs : tostring(index + 1) => {
@@ -16,7 +16,6 @@ locals {
   }
 }
 
-
 # ============ VPC  ============
 resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
@@ -24,7 +23,7 @@ resource "aws_vpc" "this" {
   enable_dns_hostnames = true
 
   tags = {
-    Name      = local.name
+    Name      = "${local.name_prefix}-vpc"
     Component = "network"
   }
 }
@@ -34,7 +33,7 @@ resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
 
   tags = {
-    Name      = "${local.name}-igw"
+    Name      = "${local.name_prefix}-igw"
     Component = "network"
   }
 }
@@ -49,8 +48,9 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${local.name}-public-${each.key}"
-    Tier = "public"
+    Name      = "${local.name_prefix}-public-${each.key}"
+    Component = "network"
+    Tier      = "public"
   }
 }
 
@@ -64,7 +64,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name      = "${local.name}-public-rt"
+    Name      = "${local.name_prefix}-public-rt"
     Component = "network"
     Tier      = "public"
   }
@@ -87,8 +87,9 @@ resource "aws_subnet" "database" {
   availability_zone = each.value.availability_zone
 
   tags = {
-    Name = "${local.name}-db-${each.key}"
-    Tier = "database"
+    Name      = "${local.name_prefix}-db-${each.key}"
+    Component = "network"
+    Tier      = "database"
   }
 }
 
@@ -98,7 +99,7 @@ resource "aws_route_table" "database" {
 
   # No default route is intentional: the database tier has no direct internet path.
   tags = {
-    Name      = "${local.name}-db-rt"
+    Name      = "${local.name_prefix}-db-rt"
     Component = "network"
     Tier      = "database"
   }
