@@ -1,19 +1,19 @@
 # Module: Application Load Balancer
 
-Module này tạo lớp Application Load Balancer cho API trong kiến trúc three-tier. ALB là internet-facing và nằm trên hai public subnet; target group gửi traffic HTTP nội bộ tới EC2. Kết nối từ CloudFront tới ALB bắt buộc dùng HTTPS và certificate regional phải khớp hostname origin mà CloudFront sử dụng.
+Module này tạo lớp Application Load Balancer cho API trong kiến trúc three-tier. ALB là internet-facing và nằm trên hai public subnet; target group gửi traffic HTTP tới EC2. Trong environment `dev`, CloudFront kết nối tới ALB qua HTTP bằng DNS name AWS cấp; production cần composition riêng nếu muốn bật HTTPS origin.
 
-Custom viewer domain của CloudFront không thuộc module này. Ở giai đoạn hiện tại, người dùng truy cập CloudFront bằng hostname mặc định `*.cloudfront.net` và certificate mặc định do CloudFront cung cấp. Certificate đó không thay thế certificate regional của ALB.
+Custom viewer domain và certificate không thuộc module này. Ở giai đoạn hiện tại, người dùng truy cập CloudFront bằng hostname mặc định `*.cloudfront.net` và certificate mặc định do CloudFront cung cấp.
 
 ## Sơ đồ và phạm vi
 
 ```text
 CloudFront origin-facing prefix list
-              │ TCP 443 + custom origin header
+              │ TCP 80 + custom origin header
               ▼
        ALB security group
               │
               ▼
-       ALB HTTPS listener
+       ALB HTTP listener
        default response: 403
               │ /api hoặc /api/*
               │ header X-Origin-Verify khớp
@@ -32,16 +32,15 @@ Module chỉ quản lý ALB, target group, listener và listener rule. Security 
 |---|---:|---|
 | `aws_lb.this` | 1 | `application`, `internet-facing`, trải trên đúng hai public subnets, bật loại bỏ invalid header. |
 | `aws_lb_target_group.api` | 1 | `target_type = "instance"`, protocol HTTP, port nhận từ `target_port`. |
-| `aws_lb_listener.api` | 1 | HTTPS, certificate regional bắt buộc, default action trả `403`. |
+| `aws_lb_listener.api` | 1 | HTTP, default action trả `403`. |
 | `aws_lb_listener_rule.api_from_cloudfront` | 1 | Forward API khi path và custom origin header cùng khớp. |
 
 ## Luồng và hành vi
 
 ### ALB listener
 
-- Listener dùng HTTPS ở `listener_port`, environment mặc định là `443`.
-- `certificate_arn` là input bắt buộc và phải là certificate ACM regional đã hợp lệ.
-- Certificate phải chứa đúng hostname CloudFront dùng làm ALB origin. Không coi DNS mặc định `*.elb.amazonaws.com` là tên có thể cấp certificate.
+- Listener dùng HTTP ở `listener_port`, environment `dev` mặc định là `80`.
+- Origin HTTP là lựa chọn riêng cho dev/test; không dùng contract này cho production nếu cần mã hóa CloudFront → ALB.
 - Default action trả `403`, do đó request không khớp rule không được forward tới EC2.
 
 ### API listener rule
@@ -68,9 +67,7 @@ Module chỉ quản lý ALB, target group, listener và listener rule. Security 
 | `security_group_id` | `string` | Yes | - | ALB security group từ module `security-groups`. |
 | `target_port` | `number` | Yes | - | Port API trên EC2. |
 | `health_check_path` | `string` | No | `/health` | Endpoint health check của API. |
-| `listener_port` | `number` | Yes | - | HTTPS port của ALB; environment dùng `443`. |
-| `certificate_arn` | `string` | Yes | - | Regional ACM certificate khớp origin hostname. |
-| `ssl_policy` | `string` | No | `ELBSecurityPolicy-TLS13-1-2-2021-06` | TLS policy cho HTTPS listener. |
+| `listener_port` | `number` | Yes | - | HTTP port của ALB; environment `dev` dùng `80`. |
 | `origin_custom_header_name` | `string` | No | `X-Origin-Verify` | Tên header CloudFront gửi tới ALB. |
 | `origin_custom_header_value` | `string` | Yes | - | Giá trị bí mật dùng để authorize rule. |
 | `enable_deletion_protection` | `bool` | No | `false` | Bảo vệ ALB khỏi xóa nhầm. |
@@ -83,12 +80,12 @@ Module không nhận `tags`. Provider của environment áp dụng `default_tags
 | Output | Consumer | Ý nghĩa |
 |---|---|---|
 | `alb_arn` | Environment, vận hành | ARN của ALB. |
-| `alb_dns_name` | Environment/vận hành | DNS name AWS cấp cho ALB; HTTPS origin hostname có thể được quản lý riêng để khớp certificate. |
+| `alb_dns_name` | Environment/vận hành | DNS name AWS cấp cho ALB và được dùng trực tiếp làm HTTP origin ở `dev`. |
 | `alb_zone_id` | DNS tương lai | Canonical ELB zone ID cho alias nếu sau này cần; module không tạo Route 53 record. |
 | `target_group_arn` | Compute | Target group để ASG đăng ký EC2. |
 | `target_group_arn_suffix` | Monitoring | Dimension `TargetGroup` của CloudWatch. |
 | `load_balancer_arn_suffix` | Monitoring | Dimension `LoadBalancer` của CloudWatch. |
-| `listener_arn` | Environment/vận hành | ARN của HTTPS listener. |
+| `listener_arn` | Environment/vận hành | ARN của HTTP listener. |
 | `listener_port` | Environment/vận hành | Port thực tế của listener. |
 
 ## Dependencies
@@ -96,16 +93,13 @@ Module không nhận `tags`. Provider của environment áp dụng `default_tags
 ```text
 network ───────────────► vpc_id, public_subnet_ids
 security-groups ───────► alb_security_group_id
-certificates ──────────► alb_certificate_arn
-                              │
-                              ▼
-                             alb
-                              ├──► compute: target_group_arn
-                              ├──► frontend: alb_dns_name
-                              └──► monitoring: ARN suffixes
+alb
+  ├──► compute: target_group_arn
+  ├──► frontend: alb_dns_name
+  └──► monitoring: ARN suffixes
 ```
 
-Certificate output có thể là `null` cho tới khi DNS validation hoàn tất hoặc có xác nhận certificate đã `ISSUED`. Khi đó composition phải dừng ở bước plan; module không chuyển listener sang HTTP để vượt qua điều kiện này.
+Trong `dev`, không có certificate hoặc DNS origin riêng; frontend dùng trực tiếp `alb_dns_name` và HTTP protocol.
 
 ## Checklist và evidence
 
@@ -113,11 +107,12 @@ Certificate output có thể là `null` cho tới khi DNS validation hoàn tất
 |---|---|---|
 | Internet-facing ALB trên hai public subnets | Implemented | `main.tf:3`: resource `aws_lb.this` |
 | Target group HTTP tới application port và health check | Implemented | `main.tf:22`: resource `aws_lb_target_group.api` |
-| HTTPS listener với certificate regional bắt buộc | Implemented | `variables.tf:47`; `main.tf:50`: resource `aws_lb_listener.api` |
+| HTTP listener cho dev/test | Implemented | `variables.tf:43`; `main.tf:50`: resource `aws_lb_listener.api` |
 | Default response và custom header rule cho API | Implemented | `main.tf:76`: `aws_lb_listener_rule.api_from_cloudfront` |
 | Contract cho frontend, compute và monitoring | Implemented | `outputs.tf:1`: ALB, target group và metric suffix outputs |
-| HTTPS origin đã sẵn sàng trong AWS | Blocked | Cần origin hostname, DNS và certificate regional có thể kiểm chứng; chưa chạy apply |
-| Hosted zone/alias Route 53 cho ALB | Not in scope | Module chỉ xuất `alb_zone_id`, không tạo DNS resource |
+| HTTP origin dùng ALB DNS name | Implemented | `modules/alb/outputs.tf:6`; composition truyền output sang frontend |
+| HTTPS origin production | Not in scope | Cần certificate regional, hostname và protocol riêng |
+| Hosted zone/alias Route 53 cho ALB | Not in scope | Dev dùng DNS name AWS cấp, không tạo DNS resource |
 
 ## Kiểm tra
 
@@ -128,4 +123,4 @@ terraform -chdir=environments/dev fmt -check -recursive
 terraform -chdir=environments/dev validate
 ```
 
-`validate` chỉ kiểm tra cấu trúc và schema Terraform; không chứng minh certificate đã `ISSUED`, DNS đã trỏ đúng hoặc ALB đã được triển khai. Không chạy `terraform apply` trong quá trình review module này.
+`validate` chỉ kiểm tra cấu trúc và schema Terraform; không chứng minh ALB, CloudFront hoặc target health đã được triển khai. Không chạy `terraform apply` trong quá trình review module này.

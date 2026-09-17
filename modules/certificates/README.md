@@ -1,11 +1,13 @@
 # Certificates module
 
-Module quản lý ACM certificate cho hai kết nối HTTPS độc lập:
+Module reusable quản lý ACM certificate cho hai kết nối HTTPS độc lập trong các environment cần HTTPS:
 
-- **CloudFront → ALB:** certificate regional của ALB được tạo ở region triển khai ALB và phải khớp chính xác `alb_origin_domain` mà CloudFront dùng làm origin.
+- **CloudFront → ALB:** certificate regional của ALB được tạo ở region triển khai ALB và phải khớp chính xác hostname mà CloudFront dùng làm origin.
 - **Client → CloudFront:** giai đoạn hiện tại dùng URL mặc định `https://<distribution>.cloudfront.net` và certificate mặc định do CloudFront cung cấp. Certificate ACM tại `us-east-1` chỉ thuộc `Optional / Future improvement` cho custom viewer domain.
 
 Module không tạo ALB, CloudFront distribution, alias CloudFront, Route 53 hosted zone hoặc DNS record trỏ viewer domain. Không giả định certificate có thể cấp cho DNS mặc định `*.elb.amazonaws.com`.
+
+Environment `dev` hiện dùng HTTP origin và không gọi module này; module chỉ là building block cho environment production/HTTPS trong tương lai.
 
 ## Trạng thái tổng quan
 

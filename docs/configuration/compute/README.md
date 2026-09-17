@@ -52,7 +52,7 @@ database.{db_address,db_port}
 | Nhóm | Input | Nguồn/ghi chú |
 |---|---|---|
 | Identity | `project_name`, `environment` | Environment, dùng cho tên ổn định. |
-| EC2 | `ami_id`, `instance_type`, `root_volume_size`, `detailed_monitoring` | AMI là input bắt buộc; không có AMI mặc định an toàn. |
+| EC2 | `ami_id`, `instance_type`, `root_volume_size`, `detailed_monitoring` | Composition lấy AMI Amazon Linux 2023 x86_64 từ public SSM Parameter theo region. |
 | Network/traffic | `subnet_ids`, `security_group_id`, `target_group_arn`, `app_port` | Lần lượt từ network, security-groups, ALB và application port. |
 | Scaling | `min_size`, `desired_capacity`, `max_size`, `cpu_target_value`, `health_check_grace_period` | Environment quyết định capacity và scaling behavior. |
 | Artifact/bootstrap | `api_artifact_s3_bucket`, `api_artifact_s3_key`, `api_start_command`, `api_log_file` | Bucket/key đồng thời bật quyền `s3:GetObject` đúng object. |
@@ -99,7 +99,7 @@ Không export user data, password, secret value hoặc toàn bộ IAM policy obj
 
 ## Điều kiện chấp nhận
 
-- `ami_id` phải được cung cấp trước plan; không để Launch Template triển khai với `null` image ID.
+- `ami_id` phải được resolve từ public SSM Parameter trước plan; không để Launch Template triển khai với `null` image ID.
 - ASG nhận đúng public subnet IDs, target group ARN và application port từ composition layer.
 - EC2 không có SSH ingress trực tiếp, bắt buộc IMDSv2 và root EBS encrypted.
 - User data không chứa database password; chỉ chứa endpoint metadata, username và secret ARN reference.

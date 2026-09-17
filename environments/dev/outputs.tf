@@ -35,29 +35,6 @@ output "database_security_group_id" {
 }
 
 # ============================================================
-# CERTIFICATES
-# ============================================================
-output "alb_certificate_arn" {
-  description = "Issued regional ACM certificate ARN for the ALB origin, or null until validation is confirmed."
-  value       = module.certificates.alb_certificate_arn
-}
-
-output "cloudfront_certificate_arn" {
-  description = "Issued us-east-1 ACM certificate ARN for a custom CloudFront viewer domain, or null when not ready."
-  value       = module.certificates.cloudfront_certificate_arn
-}
-
-output "alb_certificate_validation_records" {
-  description = "ACM DNS validation CNAMEs for the regional ALB certificate."
-  value       = module.certificates.alb_certificate_validation_records
-}
-
-output "cloudfront_certificate_validation_records" {
-  description = "ACM DNS validation CNAMEs for the us-east-1 CloudFront viewer certificate."
-  value       = module.certificates.cloudfront_certificate_validation_records
-}
-
-# ============================================================
 # APPLICATION LOAD BALANCER
 # ============================================================
 output "alb_arn" {
@@ -66,7 +43,7 @@ output "alb_arn" {
 }
 
 output "alb_dns_name" {
-  description = "AWS-assigned DNS name of the Application Load Balancer; HTTPS origin hostname is managed separately."
+  description = "AWS-assigned DNS name used by the HTTP CloudFront origin in the dev environment."
   value       = module.alb.alb_dns_name
 }
 

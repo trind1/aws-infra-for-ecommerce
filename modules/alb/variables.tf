@@ -41,21 +41,8 @@ variable "health_check_path" {
 }
 
 variable "listener_port" {
-  description = "HTTPS listener port exposed by the ALB to CloudFront."
+  description = "HTTP listener port exposed by the ALB to CloudFront."
   type        = number
-}
-
-variable "certificate_arn" {
-  description = "Issued regional ACM certificate ARN matching the ALB origin hostname used by CloudFront."
-  type        = string
-  nullable    = false
-}
-
-variable "ssl_policy" {
-  description = "TLS policy for the HTTPS listener."
-  type        = string
-  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  nullable    = false
 }
 
 variable "origin_custom_header_name" {

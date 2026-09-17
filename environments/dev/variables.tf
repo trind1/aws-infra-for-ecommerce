@@ -84,9 +84,9 @@ variable "database_subnet_cidrs" {
 # MODULE: SECURITY GROUPS
 # ============================================================
 variable "alb_listener_port" {
-  description = "HTTPS port exposed by the Application Load Balancer to CloudFront."
+  description = "HTTP port exposed by the Application Load Balancer to CloudFront."
   type        = number
-  default     = 443
+  default     = 80
   nullable    = false
 }
 
@@ -105,76 +105,8 @@ variable "database_port" {
 }
 
 # ============================================================
-# MODULE: CERTIFICATES
-# ============================================================
-variable "alb_origin_domain" {
-  description = "Hostname CloudFront will use to connect to the ALB over HTTPS; must match the regional ALB certificate."
-  type        = string
-}
-
-variable "alb_subject_alternative_names" {
-  description = "Additional DNS names included in the regional ALB certificate."
-  type        = list(string)
-  default     = []
-  nullable    = false
-}
-
-variable "alb_route53_zone_id" {
-  description = "Optional Route 53 public hosted zone ID for ALB certificate DNS validation."
-  type        = string
-  default     = null
-}
-
-variable "alb_certificate_ready" {
-  description = "Set true after an externally validated ALB certificate is confirmed ISSUED."
-  type        = bool
-  default     = false
-  nullable    = false
-}
-
-variable "enable_custom_viewer_domain" {
-  description = "Whether the future custom viewer-domain certificate and CloudFront alias are enabled."
-  type        = bool
-  default     = false
-  nullable    = false
-}
-
-variable "cloudfront_viewer_domain" {
-  description = "Custom viewer domain for CloudFront when enable_custom_viewer_domain is true."
-  type        = string
-  default     = null
-}
-
-variable "cloudfront_subject_alternative_names" {
-  description = "Additional DNS names included in the us-east-1 CloudFront viewer certificate."
-  type        = list(string)
-  default     = []
-  nullable    = false
-}
-
-variable "cloudfront_route53_zone_id" {
-  description = "Optional Route 53 public hosted zone ID for CloudFront certificate DNS validation."
-  type        = string
-  default     = null
-}
-
-variable "cloudfront_certificate_ready" {
-  description = "Set true after an externally validated CloudFront certificate is confirmed ISSUED."
-  type        = bool
-  default     = false
-  nullable    = false
-}
-
-# ============================================================
 # MODULE: APPLICATION LOAD BALANCER
 # ============================================================
-variable "alb_ssl_policy" {
-  description = "TLS policy for the ALB HTTPS listener."
-  type        = string
-  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  nullable    = false
-}
-
 variable "alb_health_check_path" {
   description = "HTTP path the ALB uses to determine application health."
   type        = string
@@ -238,14 +170,14 @@ variable "cloudfront_price_class" {
 }
 
 variable "cloudfront_alb_origin_protocol_policy" {
-  description = "Protocol CloudFront uses to connect to the ALB origin; the current design requires HTTPS."
+  description = "Protocol CloudFront uses to connect to the ALB origin in the dev environment."
   type        = string
-  default     = "https-only"
+  default     = "http-only"
   nullable    = false
 
   validation {
-    condition     = var.cloudfront_alb_origin_protocol_policy == "https-only"
-    error_message = "cloudfront_alb_origin_protocol_policy must be https-only."
+    condition     = var.cloudfront_alb_origin_protocol_policy == "http-only"
+    error_message = "cloudfront_alb_origin_protocol_policy must be http-only for the dev environment."
   }
 }
 
@@ -400,11 +332,6 @@ variable "database_log_retention_days" {
 # ============================================================
 # MODULE: COMPUTE
 # ============================================================
-variable "compute_ami_id" {
-  description = "AMI ID used by the API Auto Scaling Group; it must be available in aws_region."
-  type        = string
-}
-
 variable "compute_instance_type" {
   description = "EC2 instance type used by the API Auto Scaling Group."
   type        = string

@@ -13,9 +13,9 @@ Terraform project triển khai một hệ thống e-commerce đơn giản trên 
                          ┌────────────┴────────────┐
                          │                         │
                     Frontend                    API /api/*
-                         │                  HTTPS + custom header
+                         │                  HTTP + custom header
                          ▼                         ▼
-                 S3 private + OAC              ALB HTTPS
+                 S3 private + OAC              ALB HTTP :80
                                                      │
                                              HTTP nội bộ :3000
                                                      ▼
@@ -58,8 +58,8 @@ Terraform project triển khai một hệ thống e-commerce đơn giản trên 
 |---|---|
 | [`network`](modules/network) | VPC, public/database subnets, route tables và Internet Gateway |
 | [`security-groups`](modules/security-groups) | Security groups và rules giữa các tầng |
-| [`certificates`](modules/certificates) | ACM certificate cho ALB; certificate CloudFront `us-east-1` tùy chọn |
-| [`alb`](modules/alb) | Internet-facing ALB, HTTPS listener, target group và API rule |
+| [`certificates`](modules/certificates) | Module certificate reusable cho các environment HTTPS; không dùng trong dev hiện tại |
+| [`alb`](modules/alb) | Internet-facing ALB, HTTP listener, target group và API rule |
 | [`frontend`](modules/frontend) | S3 private, OAC, CloudFront distribution và API origin |
 | [`database`](modules/database) | DB subnet group, RDS PostgreSQL và RDS logs |
 | [`compute`](modules/compute) | IAM, Launch Template, EC2 ASG, bootstrap và CPU scaling |
@@ -87,11 +87,10 @@ terraform -chdir=environments/dev validate
 Một số input bắt buộc phải được cấp từ biến môi trường, CI secret hoặc file `.tfvars` local, gồm:
 
 - `cloudfront_alb_header_value`
-- `alb_origin_domain`
 - `database_password`
-- `compute_ami_id`
 
 CloudFront origin-facing managed prefix list được Terraform tự động tra cứu theo AWS region hiện tại, nên không cần cung cấp `cloudfront_origin_prefix_list_id` thủ công.
+AMI Amazon Linux 2023 x86_64 cho compute được Terraform lấy từ public SSM Parameter theo region hiện tại.
 
 Không commit password, custom header value, credentials, state, plan hoặc file `terraform.tfvars`.
 
@@ -99,18 +98,20 @@ Không commit password, custom header value, credentials, state, plan hoặc fil
 
 Hiện root module chưa khai báo remote backend. Vì vậy không nên dùng local state cho team hoặc production. Trước khi triển khai thật, cần bổ sung remote backend có encryption, locking, versioning và access control; sau đó tạo plan artifact để review trước khi apply.
 
-Certificate regional của ALB cần khớp với `alb_origin_domain`. DNS record cho origin ALB và việc upload frontend/API artifact hiện nằm ngoài Terraform composition này.
+Environment `dev` dùng trực tiếp DNS name AWS cấp cho ALB làm CloudFront HTTP origin; không cần domain hoặc ACM certificate. Việc upload frontend/API artifact hiện nằm ngoài Terraform composition này.
 
 ## Giới hạn hiện tại
 
 - EC2 đang ở public subnets và có public IPv4 để bootstrap.
 - RDS đang là Single-AZ; chưa có Multi-AZ/read replica/DR workflow.
 - RDS password và custom origin header có thể xuất hiện trong Terraform state; backend phải được bảo vệ như dữ liệu nhạy cảm.
+- CloudFront → ALB dùng HTTP cho dev/test; production cần environment riêng với HTTPS origin và certificate regional.
 - Chưa có WAF, CI/CD workflow, policy-as-code hoặc security scanner trong repository.
 - Frontend/API artifact upload và CloudFront invalidation chưa được quản lý ở đây.
 
 ## Tài liệu
 
+- [Sơ đồ kiến trúc dùng thuyết trình](docs/architecture/README.md)
 - [Kiến trúc tổng thể](docs/components/README.md)
 - [Kế hoạch và contract cấu hình](docs/configuration/README.md)
 - [Cost estimation](docs/cost-estimation/README.md)

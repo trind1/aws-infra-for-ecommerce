@@ -14,7 +14,6 @@ Các tài liệu này chuyển kiến trúc trong [`docs/components/`](../compon
 ```text
 network
   ├── security-groups
-  ├── certificates ──┐
   └── monitoring (log foundation)
                          ├── alb ──► frontend
                          ├── compute ──► monitoring (alarms/metrics)
@@ -29,9 +28,9 @@ network
 |---|---|---|---|
 | Network | [README](network/README.md) | CIDR, AZs | Security groups, ALB, compute, database |
 | Security groups | [README](security-groups/README.md) | VPC, ports, CloudFront prefix list | ALB, compute, database |
-| Certificates | [README](certificates/README.md) | ALB origin domain/certificate; viewer certificate `us-east-1` là optional/future | ALB, CloudFront |
-| ALB | [README](alb/README.md) | VPC, public subnets, ALB SG, regional ALB certificate, origin header | Frontend, compute, monitoring |
-| Frontend | [README](frontend/README.md) | ALB origin hostname, HTTPS/header, optional viewer certificate | Người dùng cuối |
+| Certificates | [README](certificates/README.md) | Reusable cho HTTPS environment; không dùng trong dev hiện tại | Environment HTTPS |
+| ALB | [README](alb/README.md) | VPC, public subnets, ALB SG, HTTP listener, origin header | Frontend, compute, monitoring |
+| Frontend | [README](frontend/README.md) | ALB DNS name, HTTP origin/header, default viewer certificate | Người dùng cuối |
 | Database | [README](database/README.md) | DB subnets, DB SG, out-of-band credentials | Compute, monitoring |
 | Monitoring | [README](monitoring/README.md) | Tên/tài nguyên ALB, ASG, RDS | Compute và vận hành |
 | Compute | [README](compute/README.md) | Public subnets, app SG, target group, DB, log groups | ALB, monitoring |
@@ -40,13 +39,12 @@ network
 
 1. `network` xuất VPC ID, public subnet IDs và database subnet IDs.
 2. `security-groups` nhận VPC ID, xuất ba security group IDs.
-3. `certificates` cung cấp certificate regional cho ALB origin HTTPS theo hostname origin đã chốt; certificate CloudFront `us-east-1` chỉ xuất hiện khi bật custom viewer domain trong tương lai.
-4. `alb` nhận public subnets, ALB SG, regional certificate và origin header; xuất target group, listener, DNS/ARN và metric suffixes.
-5. Composition layer định nghĩa ASG naming contract ổn định cho monitoring alarms; `monitoring` sở hữu log foundation và xuất tên log groups cho `compute`.
-6. `compute` nhận target group, app SG, database connection metadata và monitoring log outputs; xuất ASG name.
-7. `database` xuất endpoint, port, identifier và log group metadata; không xuất credential value. Master password phải được inject ngoài mã nguồn và bảo vệ trong backend state.
-8. `monitoring` pha alarms nhận identity của ALB, ASG và RDS; không yêu cầu compute phụ thuộc ngược vào alarms.
-9. `frontend` dùng URL mặc định `*.cloudfront.net` và certificate mặc định của CloudFront ở giai đoạn hiện tại; nhận ALB origin hostname/protocol HTTPS và header bí mật; custom viewer alias/certificate là optional/future.
+3. `alb` nhận public subnets, ALB SG, HTTP listener và origin header; xuất target group, listener, DNS/ARN và metric suffixes.
+4. Composition layer định nghĩa ASG naming contract ổn định cho monitoring alarms; `monitoring` sở hữu log foundation và xuất tên log groups cho `compute`.
+5. `compute` nhận target group, app SG, database connection metadata và monitoring log outputs; xuất ASG name.
+6. `database` xuất endpoint, port, identifier và log group metadata; không xuất credential value. Master password phải được inject ngoài mã nguồn và bảo vệ trong backend state.
+7. `monitoring` pha alarms nhận identity của ALB, ASG và RDS; không yêu cầu compute phụ thuộc ngược vào alarms.
+8. `frontend` dùng URL mặc định `*.cloudfront.net` và certificate mặc định của CloudFront; nhận ALB DNS name/protocol HTTP và header bí mật. HTTPS origin là phương án riêng cho production.
 
 ## Kiểm tra thiết kế trước khi áp dụng
 
@@ -54,6 +52,6 @@ network
 - ALB chỉ nhận traffic origin-facing từ CloudFront; API header là lớp kiểm tra bổ sung, không thay thế security group.
 - RDS ở database subnet, không gán public IP, chỉ có một instance Single-AZ theo phạm vi hiện tại.
 - Client → CloudFront dùng certificate mặc định của CloudFront với URL `*.cloudfront.net`; không cần custom viewer domain, Route 53 hosted zone hoặc certificate `us-east-1` ở giai đoạn hiện tại.
-- CloudFront → ALB có mục tiêu HTTPS và cần certificate regional hợp lệ, khớp ALB origin domain. Origin domain, DNS management và phương án cấp/validate certificate hiện chưa được chốt; không được khẳng định HTTPS origin đã sẵn sàng.
-- Khi triển khai custom viewer domain trong tương lai, certificate CloudFront phải ở `us-east-1`; certificate này không thay thế certificate regional của ALB.
+- CloudFront → ALB dùng HTTP trong dev/test; không có certificate hoặc origin domain riêng.
+- Production HTTPS origin cần certificate regional và hostname phù hợp; không dùng HTTP config này cho production.
 - Không hình thành dependency cycle qua output log groups và alarm resources.

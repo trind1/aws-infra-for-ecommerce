@@ -45,14 +45,12 @@ resource "aws_lb_target_group" "api" {
   }
 }
 
-# ============ HTTPS LISTENER  ============
+# ============ HTTP LISTENER  ============
 
 resource "aws_lb_listener" "api" {
   load_balancer_arn = aws_lb.this.arn
   port              = var.listener_port
-  protocol          = "HTTPS"
-  certificate_arn   = var.certificate_arn
-  ssl_policy        = var.ssl_policy
+  protocol          = "HTTP"
 
   default_action {
     type = "fixed-response"

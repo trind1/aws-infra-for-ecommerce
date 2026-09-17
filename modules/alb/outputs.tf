@@ -4,7 +4,7 @@ output "alb_arn" {
 }
 
 output "alb_dns_name" {
-  description = "AWS-assigned ALB DNS name; the HTTPS origin hostname may be managed separately."
+  description = "AWS-assigned ALB DNS name used by the environment's CloudFront origin."
   value       = aws_lb.this.dns_name
 }
 
@@ -29,11 +29,11 @@ output "load_balancer_arn_suffix" {
 }
 
 output "listener_arn" {
-  description = "API listener ARN."
+  description = "API HTTP listener ARN."
   value       = aws_lb_listener.api.arn
 }
 
 output "listener_port" {
-  description = "Effective ALB listener port."
+  description = "Effective ALB HTTP listener port."
   value       = aws_lb_listener.api.port
 }

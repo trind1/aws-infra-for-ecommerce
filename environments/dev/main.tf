@@ -13,6 +13,12 @@ data "aws_ec2_managed_prefix_list" "cloudfront" {
   name = "com.amazonaws.global.cloudfront.origin-facing"
 }
 
+# Amazon Linux 2023 x86_64 AMI published by AWS for the current region.
+# The compute bootstrap installs the amd64 CloudWatch Agent package.
+data "aws_ssm_parameter" "amazon_linux_2023_ami" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
+}
+
 # ============================================================
 # MODULE: NETWORK
 # ============================================================
@@ -49,32 +55,6 @@ module "security_groups" {
 }
 
 # ============================================================
-# MODULE: CERTIFICATES
-# ============================================================
-module "certificates" {
-  source = "../../modules/certificates"
-
-  providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1
-  }
-
-  project_name = var.project_name
-  environment  = var.environment
-
-  alb_origin_domain             = var.alb_origin_domain
-  alb_subject_alternative_names = var.alb_subject_alternative_names
-  alb_route53_zone_id           = var.alb_route53_zone_id
-  alb_certificate_ready         = var.alb_certificate_ready
-
-  enable_custom_viewer_domain          = var.enable_custom_viewer_domain
-  cloudfront_viewer_domain             = var.cloudfront_viewer_domain
-  cloudfront_subject_alternative_names = var.cloudfront_subject_alternative_names
-  cloudfront_route53_zone_id           = var.cloudfront_route53_zone_id
-  cloudfront_certificate_ready         = var.cloudfront_certificate_ready
-}
-
-# ============================================================
 # MODULE: APPLICATION LOAD BALANCER
 # ============================================================
 module "alb" {
@@ -90,8 +70,6 @@ module "alb" {
   target_port       = var.application_port
   health_check_path = var.alb_health_check_path
   listener_port     = var.alb_listener_port
-  certificate_arn   = module.certificates.alb_certificate_arn
-  ssl_policy        = var.alb_ssl_policy
 
   origin_custom_header_name  = var.cloudfront_alb_header_name
   origin_custom_header_value = var.cloudfront_alb_header_value
@@ -109,13 +87,11 @@ module "frontend" {
   project_name = var.project_name
   environment  = var.environment
 
-  alb_origin_dns_name        = var.alb_origin_domain
+  alb_origin_dns_name        = module.alb.alb_dns_name
   alb_origin_protocol_policy = var.cloudfront_alb_origin_protocol_policy
 
-  cloudfront_aliases = var.enable_custom_viewer_domain ? [
-    coalesce(var.cloudfront_viewer_domain, "")
-  ] : []
-  cloudfront_certificate_arn = module.certificates.cloudfront_certificate_arn
+  cloudfront_aliases         = []
+  cloudfront_certificate_arn = null
   cloudfront_price_class     = var.cloudfront_price_class
 
   origin_custom_header_name  = var.cloudfront_alb_header_name
@@ -169,7 +145,7 @@ module "compute" {
   project_name = var.project_name
   environment  = var.environment
 
-  ami_id                    = var.compute_ami_id
+  ami_id                    = data.aws_ssm_parameter.amazon_linux_2023_ami.value
   instance_type             = var.compute_instance_type
   subnet_ids                = module.network.public_subnet_ids
   security_group_id         = module.security_groups.application_security_group_id

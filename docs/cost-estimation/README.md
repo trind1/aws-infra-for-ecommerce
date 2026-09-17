@@ -226,7 +226,7 @@ Với giả định trên, dimension cao nhất là processed bytes khoảng `0.
 | Listener/TLS | HTTPS port `443`, TLS policy `ELBSecurityPolicy-TLS13-1-2-2021-06` | [`../../modules/alb/main.tf`](../../modules/alb/main.tf#L50), [`../../environments/dev/variables.tf`](../../environments/dev/variables.tf#L94) |
 | Target group | HTTP tới API port `3000`, 1 target group | [`../../modules/alb/main.tf`](../../modules/alb/main.tf#L22), [`../../environments/dev/variables.tf`](../../environments/dev/variables.tf#L108) |
 
-Target group, listener và listener rule không tạo thêm ALB line item. Certificate regional của ALB là điều kiện HTTPS, không phải một ALB hoặc một listener có phí riêng.
+Target group, listener và listener rule không tạo thêm ALB line item. Dev dùng HTTP origin nên không tạo regional ALB certificate; production HTTPS certificate là mô hình riêng.
 
 ### 5.4. Amazon RDS for PostgreSQL
 
@@ -416,7 +416,7 @@ Khuyến nghị lưu estimate với cách **Baseline theo đúng form bạn gử
 | Number of requests (HTTPS) | `10,000,000/month` gross ở United States | Usage assumption |
 | Discounted Pricing | Không chọn discount/commitment trong baseline | Không có Savings Bundle hoặc custom commitment trong Terraform |
 | S3 origin requests/data transfer | Không nhập thêm trong CloudFront viewer fields | Private S3 origin dùng OAC; origin fetch cần tránh cộng trùng |
-| ALB origin requests/data transfer | Đã phản ánh bằng API traffic/ALB LCU; không cộng viewer traffic lần nữa | `/api/*` dùng ALB origin, origin protocol `https-only` |
+| ALB origin requests/data transfer | Đã phản ánh bằng API traffic/ALB LCU; không cộng viewer traffic lần nữa | `/api/*` dùng ALB origin, dev origin protocol `http-only` |
 | Origin Shield | `0` | Repository không cấu hình |
 | Invalidations | `0` baseline | Nhập số path thực tế nếu có deployment invalidation |
 | CloudFront Functions/Lambda@Edge | `0` | Không có resource tương ứng |
@@ -424,7 +424,7 @@ Khuyến nghị lưu estimate với cách **Baseline theo đúng form bạn gử
 
 `PriceClass_100` là cấu hình distribution, còn các giá trị data transfer/request là usage input. Hai khái niệm này không thay thế cho nhau. CloudFront origin fetch từ AWS origin và CloudFront viewer delivery cũng là hai chiều traffic khác nhau; không cộng cùng một GB vào cả S3, ALB và CloudFront.
 
-Trong baseline, không nhập domain mặc định `*.cloudfront.net` thành Route 53 record hoặc ACM certificate. Certificate mặc định của CloudFront phục vụ **Client → CloudFront**; regional ALB certificate phục vụ **CloudFront → ALB** và vẫn là điều kiện riêng của thiết kế HTTPS origin.
+Trong baseline, không nhập domain mặc định `*.cloudfront.net` thành Route 53 record hoặc ACM certificate. Certificate mặc định của CloudFront phục vụ **Client → CloudFront**; dev dùng HTTP cho **CloudFront → ALB** và không tạo regional ALB certificate. Production HTTPS là mô hình cost riêng.
 
 ### 5.7. Amazon CloudWatch
 

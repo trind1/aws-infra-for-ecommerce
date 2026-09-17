@@ -9,17 +9,17 @@ variable "environment" {
 }
 
 variable "alb_origin_dns_name" {
-  description = "Hostname CloudFront uses to connect to the ALB API origin over HTTPS."
+  description = "DNS name CloudFront uses to connect to the ALB API origin."
   type        = string
 }
 
 variable "alb_origin_protocol_policy" {
-  description = "CloudFront-to-ALB protocol; the current environment design requires HTTPS."
+  description = "CloudFront-to-ALB protocol policy."
   type        = string
 
   validation {
-    condition     = var.alb_origin_protocol_policy == "https-only"
-    error_message = "alb_origin_protocol_policy must be https-only for the current ALB design."
+    condition     = contains(["http-only", "https-only"], var.alb_origin_protocol_policy)
+    error_message = "alb_origin_protocol_policy must be http-only or https-only."
   }
 }
 

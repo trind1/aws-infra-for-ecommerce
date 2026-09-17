@@ -13,14 +13,16 @@
 
 ## Mục tiêu
 
-Quản lý hai certificate độc lập cho hai kết nối HTTPS trong kiến trúc:
+Tài liệu contract cho module certificate reusable trong các environment cần HTTPS. Environment `dev` hiện dùng HTTP origin nên không tạo certificate ALB.
+
+Khi được bật, module quản lý hai certificate độc lập cho hai kết nối HTTPS trong kiến trúc:
 
 1. **Client → CloudFront:** giai đoạn hiện tại dùng URL mặc định `https://<distribution>.cloudfront.net` và certificate mặc định do CloudFront cung cấp. Luồng này không cần custom viewer domain, Route 53 hosted zone hoặc ACM certificate `us-east-1`.
-2. **CloudFront → ALB:** mục tiêu thiết kế hiện tại là HTTPS. ALB cần certificate ACM regional hợp lệ và khớp với hostname mà CloudFront dùng làm ALB origin.
+2. **CloudFront → ALB:** ALB cần certificate ACM regional hợp lệ và khớp với hostname mà CloudFront dùng làm ALB origin.
 
 Custom viewer domain cho người dùng là `Optional / Future improvement`; không được dùng một cờ custom viewer domain để tắt certificate bắt buộc của ALB origin.
 
-## Thiết kế hiện tại: certificate cho ALB origin HTTPS
+## Tùy chọn production: certificate cho ALB origin HTTPS
 
 ### Dịch vụ và cấu hình
 
@@ -28,7 +30,7 @@ Custom viewer domain cho người dùng là `Optional / Future improvement`; kh�
 |---|---|
 | AWS Certificate Manager cho ALB | Certificate regional tại region triển khai ALB; SAN/domain phải khớp chính xác ALB origin domain mà CloudFront sử dụng. |
 | DNS provider | Dùng để cấp DNS validation cho certificate ALB; có thể là Route 53 hoặc DNS provider bên ngoài. Hosted zone và cách quản lý DNS hiện chưa được chốt. |
-| CloudFront origin | Kết nối tới ALB bằng HTTPS sau khi certificate hợp lệ và CloudFront origin protocol được cấu hình `https-only`. |
+| CloudFront origin | Khi bật HTTPS production, kết nối tới ALB sau khi certificate hợp lệ và origin protocol là `https-only`; dev dùng `http-only`. |
 | CloudFront viewer | Dùng certificate mặc định của CloudFront cho hostname `*.cloudfront.net`; không tạo certificate riêng trong giai đoạn này. |
 
 ### Input contract
@@ -48,7 +50,7 @@ Custom viewer domain cho người dùng là `Optional / Future improvement`; kh�
 ### Điều kiện chấp nhận
 
 - Certificate ALB ở đúng region triển khai và khớp hostname CloudFront dùng để kết nối origin.
-- CloudFront → ALB giữ mục tiêu HTTPS; không chuyển sang HTTP chỉ vì viewer domain đang dùng hostname mặc định.
+- Environment production có thể dùng HTTPS giữa CloudFront và ALB; dev hiện dùng HTTP và không cần certificate.
 - Không giả định có thể cấp certificate cho DNS mặc định `*.elb.amazonaws.com`; origin domain, DNS và phương án certificate còn mở là blocker.
 - Client → CloudFront dùng certificate mặc định do CloudFront cung cấp, độc lập với certificate regional của ALB.
 - Không đưa private key, token DNS hoặc thông tin registrar vào state/tài liệu.
@@ -81,11 +83,11 @@ Custom viewer domain cho người dùng là `Optional / Future improvement`; kh�
 
 | # | Hạng mục | Trạng thái | Evidence code | Evidence validation | Consumer / ghi chú |
 |---:|---|---|---|---|---|
-| 1 | Thiết kế tách viewer certificate và ALB origin certificate | Implemented | `docs/configuration/certificates/README.md:16` | Đối chiếu thiết kế — Pass | Hai kết nối HTTPS độc lập |
-| 2 | Input regional ALB certificate | Implemented | `modules/certificates/variables.tf:11` | `terraform fmt -check modules/certificates environments/dev/main.tf environments/dev/providers.tf environments/dev/variables.tf environments/dev/outputs.tf` — exit 0 | `alb_origin_domain` là required input |
-| 3 | Resource ACM regional và DNS validation ALB | Implemented | `modules/certificates/main.tf:7` | `terraform -chdir=environments/dev validate` — Blocked bởi required arguments còn thiếu ở `module.compute` | Chưa thể xác nhận toàn bộ composition |
-| 4 | Input và resource custom viewer certificate `us-east-1` | Implemented | `modules/certificates/variables.tf:36`, `modules/certificates/main.tf:48` | `terraform -chdir=environments/dev validate` — Blocked bởi required arguments còn thiếu ở `module.compute` | Chỉ khi `enable_custom_viewer_domain = true` |
-| 5 | Output ARN và validation records | Implemented | `modules/certificates/outputs.tf:1` | `terraform fmt -check modules/certificates environments/dev/main.tf environments/dev/providers.tf environments/dev/variables.tf environments/dev/outputs.tf` — exit 0 | Không coi request ARN là ARN đã `ISSUED` |
-| 6 | Environment provider alias và module wiring | Implemented | `environments/dev/providers.tf:14`, `environments/dev/main.tf:46` | `terraform -chdir=environments/dev validate` — Blocked bởi required arguments còn thiếu ở `module.compute` | Đã truyền `aws.us_east_1` |
-| 7 | HTTPS CloudFront → ALB sẵn sàng | Blocked | `docs/configuration/certificates/README.md:48` | Chưa có origin domain/DNS/certificate có thể kiểm chứng | Không báo PASS; cần quyết định authoritative origin domain |
+| 1 | Thiết kế tách viewer certificate và ALB origin certificate | Implemented | `docs/configuration/certificates/README.md:16` | Đối chiếu thiết kế — Pass | Reusable cho environment HTTPS; không dùng trong dev |
+| 2 | Input regional ALB certificate | Implemented | `modules/certificates/variables.tf:11` | `terraform fmt -check modules/certificates` — exit 0 | Không thuộc dev HTTP composition |
+| 3 | Resource ACM regional và DNS validation ALB | Implemented | `modules/certificates/main.tf:7` | Standalone module validation — Chưa xác minh | Dùng cho HTTPS environment |
+| 4 | Input và resource custom viewer certificate `us-east-1` | Implemented | `modules/certificates/variables.tf:36`, `modules/certificates/main.tf:48` | Standalone module validation — Chưa xác minh | Chỉ dùng khi composition HTTPS bật feature |
+| 5 | Output ARN và validation records | Implemented | `modules/certificates/outputs.tf:1` | `terraform fmt -check modules/certificates` — exit 0 | Không coi request ARN là ARN đã `ISSUED` |
+| 6 | Environment provider alias và module wiring | Not in scope | `environments/dev/main.tf` | Dev không gọi module certificates | HTTPS provider wiring dành cho environment khác |
+| 7 | HTTPS CloudFront → ALB production sẵn sàng | Not in scope | `docs/configuration/certificates/README.md:23` | Dev dùng HTTP; chưa triển khai production HTTPS | Cần environment và domain riêng |
 | 8 | Custom viewer alias và DNS record | Not in scope | `docs/configuration/certificates/README.md:56` | Chưa xác minh | Optional / Future improvement; thuộc frontend/composition |
