@@ -83,7 +83,6 @@ Password, master username và giá trị secret không được expose qua outpu
 - Không có output nào trả về password hoặc secret value.
 - CloudWatch log groups chỉ được tạo cho log types được chọn và có retention rõ ràng.
 - `database_password` được cấp ngoài mã nguồn và backend state phải được bảo vệ như dữ liệu nhạy cảm.
-- `terraform validate` phải thành công ở module database; validation toàn composition chỉ được báo đạt khi các module phụ thuộc còn lại đã đủ input.
 
 ## Rủi ro và quyết định còn mở
 

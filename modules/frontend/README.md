@@ -21,7 +21,7 @@ Browser → https://<distribution>.cloudfront.net/ → CloudFront → S3 private
 
 ## Drift cần xử lý
 
-Module có feature flag `enable_api_origin`. Khi `false`, CloudFront chỉ có S3 origin và
+Module có feature flag `enable_api_origin`. Khi `false`, module chỉ tạo S3 origin và
 không tạo ordered behavior `/api/*`; khi `true`, module hỗ trợ contract cũ `CloudFront → ALB
 HTTP/HTTPS`. Đây là điểm cần xem xét nếu environment production cần API qua CloudFront.
 
