@@ -15,3 +15,6 @@ backend.hcl
 # Local tooling and editor files
 .DS_Store
 .vscode/
+
+# Locally generated test certificates and private keys
+**/local-certs/

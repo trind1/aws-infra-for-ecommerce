@@ -75,28 +75,16 @@ variable "health_check_grace_period" {
   default     = 300
 }
 
-variable "api_artifact_s3_bucket" {
-  description = "Optional S3 bucket containing a ZIP of the NodeJS API."
+variable "docker_image" {
+  description = "Docker Hub image URI, including a version tag, used by the API container."
   type        = string
-  default     = null
-}
 
-variable "api_artifact_s3_key" {
-  description = "Optional S3 object key for the NodeJS API ZIP."
-  type        = string
-  default     = null
-}
-
-variable "api_start_command" {
-  description = "Systemd ExecStart command for the API artifact."
-  type        = string
-  default     = "/usr/bin/node /opt/nodejs-api/server.js"
-}
-
-variable "api_log_file" {
-  description = "Application log filename under /var/log/<app-name>."
-  type        = string
-  default     = "application.log"
+  validation {
+    condition = trimspace(var.docker_image) != "" && !strcontains(var.docker_image, " ") && (
+      strcontains(var.docker_image, ":") || strcontains(var.docker_image, "@sha256:")
+    )
+    error_message = "docker_image must be a non-empty image URI without spaces and include a fixed tag or digest."
+  }
 }
 
 variable "api_log_group_name" {

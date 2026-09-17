@@ -5,7 +5,7 @@ locals {
 # ============ SECURITY GROUPS  ============
 resource "aws_security_group" "alb" {
   name        = "${local.name}-alb-sg"
-  description = "Ingress for the CloudFront origin-facing path to the ALB."
+  description = "Ingress for direct HTTPS API clients to the ALB."
   vpc_id      = var.vpc_id
 
   # All rules are managed by standalone rule resources below.
@@ -43,13 +43,15 @@ resource "aws_security_group" "database" {
 }
 
 # ============ ALB SECURITY GROUP RULES  ============
-resource "aws_vpc_security_group_ingress_rule" "alb_from_cloudfront" {
+resource "aws_vpc_security_group_ingress_rule" "alb_from_https_test_clients" {
+  for_each = var.alb_https_client_cidr_blocks
+
   security_group_id = aws_security_group.alb.id
-  description       = "CloudFront origin-facing managed prefix list only."
-  from_port         = var.alb_listener_port
-  to_port           = var.alb_listener_port
+  description       = "Explicit test client access to the optional ALB HTTPS listener."
+  from_port         = 443
+  to_port           = 443
   ip_protocol       = "tcp"
-  prefix_list_id    = var.cloudfront_origin_prefix_list_id
+  cidr_ipv4         = each.value
 }
 
 resource "aws_vpc_security_group_egress_rule" "alb_to_app" {

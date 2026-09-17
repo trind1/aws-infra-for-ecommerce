@@ -1,0 +1,14 @@
+# Copy this file to terraform.tfvars only for an ALB HTTPS test.
+# The copied file is ignored by Git.
+
+enable_alb_https_test        = true
+enable_cloudfront_api        = false
+application_docker_image     = "YOUR_DOCKERHUB_USERNAME/ecommerce-api:1.0.0"
+
+alb_https_certificate_file   = "local-certs/alb.crt.pem"
+alb_https_private_key_file   = "local-certs/alb.key.pem"
+
+alb_https_certificate_version = 2
+alb_https_client_cidr_blocks  = ["PUBLIC_IP_CUA_BAN/32"]
+
+# Replace 203.0.113.10/32 with the public CIDR of the test client.

@@ -5,10 +5,14 @@ data "aws_cloudfront_cache_policy" "s3_optimized" {
 }
 
 data "aws_cloudfront_cache_policy" "api_disabled" {
+  count = var.enable_api_origin ? 1 : 0
+
   name = "Managed-CachingDisabled"
 }
 
 data "aws_cloudfront_origin_request_policy" "api_all_viewer_except_host" {
+  count = var.enable_api_origin ? 1 : 0
+
   name = "Managed-AllViewerExceptHostHeader"
 }
 
@@ -89,7 +93,7 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
 
 resource "aws_cloudfront_distribution" "this" {
   enabled             = true
-  comment             = "${local.name} frontend and API edge distribution"
+  comment             = "${local.name} frontend distribution"
   default_root_object = "index.html"
   aliases             = var.cloudfront_aliases
   price_class         = var.cloudfront_price_class
@@ -100,20 +104,24 @@ resource "aws_cloudfront_distribution" "this" {
     origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
   }
 
-  origin {
-    domain_name = var.alb_origin_dns_name
-    origin_id   = local.api_origin_id
+  dynamic "origin" {
+    for_each = var.enable_api_origin ? [var.alb_origin_dns_name] : []
 
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = var.alb_origin_protocol_policy
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
+    content {
+      domain_name = origin.value
+      origin_id   = local.api_origin_id
 
-    custom_header {
-      name  = var.origin_custom_header_name
-      value = var.origin_custom_header_value
+      custom_origin_config {
+        http_port              = 80
+        https_port             = 443
+        origin_protocol_policy = var.alb_origin_protocol_policy
+        origin_ssl_protocols   = ["TLSv1.2"]
+      }
+
+      custom_header {
+        name  = var.origin_custom_header_name
+        value = var.origin_custom_header_value
+      }
     }
   }
 
@@ -127,16 +135,19 @@ resource "aws_cloudfront_distribution" "this" {
     cached_methods         = ["GET", "HEAD"]
   }
 
-  # The header is added by CloudFront and checked again by the ALB listener.
-  ordered_cache_behavior {
-    path_pattern             = "/api/*"
-    target_origin_id         = local.api_origin_id
-    viewer_protocol_policy   = "redirect-to-https"
-    compress                 = true
-    cache_policy_id          = data.aws_cloudfront_cache_policy.api_disabled.id
-    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.api_all_viewer_except_host.id
-    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods           = ["GET", "HEAD"]
+  dynamic "ordered_cache_behavior" {
+    for_each = var.enable_api_origin ? [1] : []
+
+    content {
+      path_pattern             = "/api/*"
+      target_origin_id         = local.api_origin_id
+      viewer_protocol_policy   = "redirect-to-https"
+      compress                 = true
+      cache_policy_id          = data.aws_cloudfront_cache_policy.api_disabled[0].id
+      origin_request_policy_id = data.aws_cloudfront_origin_request_policy.api_all_viewer_except_host[0].id
+      allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods           = ["GET", "HEAD"]
+    }
   }
 
   restrictions {

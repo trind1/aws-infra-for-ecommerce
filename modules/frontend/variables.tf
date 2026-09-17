@@ -9,8 +9,21 @@ variable "environment" {
 }
 
 variable "alb_origin_dns_name" {
-  description = "DNS name CloudFront uses to connect to the ALB API origin."
+  description = "Optional DNS name CloudFront uses to connect to the ALB API origin."
   type        = string
+  default     = null
+
+  validation {
+    condition     = !var.enable_api_origin || var.alb_origin_dns_name != null
+    error_message = "alb_origin_dns_name is required when enable_api_origin is true."
+  }
+}
+
+variable "enable_api_origin" {
+  description = "Whether CloudFront should create an ALB API origin and /api/* behavior."
+  type        = bool
+  default     = true
+  nullable    = false
 }
 
 variable "alb_origin_protocol_policy" {
@@ -63,10 +76,15 @@ variable "origin_custom_header_name" {
 }
 
 variable "origin_custom_header_value" {
-  description = "Sensitive shared value CloudFront sends to the ALB."
+  description = "Optional sensitive shared value CloudFront sends to the ALB API origin."
   type        = string
+  default     = null
   sensitive   = true
-  nullable    = false
+
+  validation {
+    condition     = !var.enable_api_origin || var.origin_custom_header_value != null
+    error_message = "origin_custom_header_value is required when enable_api_origin is true."
+  }
 }
 
 variable "bucket_force_destroy" {

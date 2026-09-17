@@ -13,14 +13,11 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "cloudfront_origin_prefix_list_id" {
-  description = "CloudFront origin-facing managed prefix list ID."
-  type        = string
-}
-
-variable "alb_listener_port" {
-  description = "ALB listener port exposed to CloudFront."
-  type        = number
+variable "alb_https_client_cidr_blocks" {
+  description = "Client CIDR blocks allowed to reach the optional ALB HTTPS test listener."
+  type        = set(string)
+  default     = []
+  nullable    = false
 }
 
 variable "application_port" {

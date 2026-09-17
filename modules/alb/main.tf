@@ -69,6 +69,41 @@ resource "aws_lb_listener" "api" {
   }
 }
 
+# ============ OPTIONAL HTTPS TEST LISTENER ============
+
+resource "aws_lb_listener" "api_https_test" {
+  count = var.enable_https_listener ? 1 : 0
+
+  load_balancer_arn = aws_lb.this.arn
+  port              = 443
+  protocol          = "HTTPS"
+  certificate_arn   = var.https_certificate_arn
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+
+  default_action {
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Forbidden"
+      status_code  = "403"
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.https_certificate_arn != null
+      error_message = "https_certificate_arn is required when enable_https_listener is true."
+    }
+  }
+
+  tags = {
+    Name      = "${local.alb_name}-https-test-listener"
+    Component = "alb"
+    Tier      = "public"
+  }
+}
+
 # ============ CLOUDFRONT API LISTENER RULE  ============
 
 resource "aws_lb_listener_rule" "api_from_cloudfront" {
@@ -95,6 +130,32 @@ resource "aws_lb_listener_rule" "api_from_cloudfront" {
 
   tags = {
     Name      = "${local.alb_name}-api-rule"
+    Component = "alb"
+    Tier      = "public"
+  }
+}
+
+# ============ HTTPS TEST LISTENER RULE  ============
+
+resource "aws_lb_listener_rule" "api_from_https_test" {
+  count = var.enable_https_listener ? 1 : 0
+
+  listener_arn = aws_lb_listener.api_https_test[0].arn
+  priority     = 100
+
+  condition {
+    path_pattern {
+      values = ["/api", "/api/*"]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.api.arn
+  }
+
+  tags = {
+    Name      = "${local.alb_name}-https-test-api-rule"
     Component = "alb"
     Tier      = "public"
   }

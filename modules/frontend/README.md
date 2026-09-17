@@ -1,137 +1,47 @@
-# Module: Frontend
+# Frontend module
 
-Module này tạo nơi lưu frontend tĩnh trong S3 private và phân phối qua một CloudFront distribution. Distribution có hai origin: S3 cho static assets và ALB cho API `/api/*`.
+Module tạo S3 bucket private, Origin Access Control và CloudFront distribution cho
+frontend tĩnh. Kiến trúc mục tiêu không dùng CloudFront làm API entry point.
 
-## Trạng thái tổng quan
+## Resources
 
-- Planned: 0
-- In progress: 0
-- Implemented: 8
-- Validated: 0
-- Blocked: 0
-- Not in scope: 1
+| Resource | Vai trò |
+|---|---|
+| `aws_s3_bucket.frontend` | Lưu frontend build |
+| Public access block/ownership/versioning/encryption | Bảo vệ bucket và rollback artifact |
+| `aws_cloudfront_origin_access_control.frontend` | SigV4 access từ CloudFront tới S3 |
+| `aws_cloudfront_distribution.this` | HTTPS viewer và static caching |
+| Bucket policy | Chỉ CloudFront distribution được đọc |
 
-Ở giai đoạn hiện tại, viewer dùng hostname mặc định `https://<distribution>.cloudfront.net` và certificate mặc định do CloudFront cung cấp. Custom viewer domain là `Optional / Future improvement`; module chỉ dùng alias và certificate `us-east-1` khi cả hai được truyền rõ ràng.
-
-## Sơ đồ và phạm vi
-
-```text
-Client
-  │ HTTPS tới *.cloudfront.net
-  │ certificate mặc định của CloudFront
-  ▼
-CloudFront distribution
-  ├── default behavior ──► S3 private bucket
-  │                         OAC SigV4
-  │
-  └── /api/* ── HTTP + X-Origin-Verify ──► ALB DNS name
-                                            │
-                                            ▼
-                                     API target group
-```
-
-Module quản lý S3 bucket, các bucket security controls, OAC, CloudFront distribution và bucket policy. ALB, ACM certificate, Route 53 hosted zone/record và việc upload artifact không thuộc module này.
-
-## Resources và data sources
-
-| Resource/data source | Số lượng | Cấu hình chính |
-|---|---:|---|
-| `aws_s3_bucket.frontend` | 1 | Bucket prefix duy nhất, `force_destroy` do environment quyết định. |
-| `aws_s3_bucket_public_access_block.frontend` | 1 | Chặn public ACL, public policy và public bucket. |
-| `aws_s3_bucket_ownership_controls.frontend` | 1 | `BucketOwnerEnforced`, không phụ thuộc ACL. |
-| `aws_s3_bucket_versioning.frontend` | 1 | Bật versioning cho artifact rollback/audit. |
-| `aws_s3_bucket_server_side_encryption_configuration.frontend` | 1 | SSE-S3 (`AES256`) mặc định. |
-| `aws_cloudfront_origin_access_control.frontend` | 1 | SigV4, signing `always`, origin type S3. |
-| `aws_cloudfront_distribution.this` | 1 | S3 default origin, ALB API origin, default viewer certificate hoặc custom certificate theo input. |
-| `aws_iam_policy_document.frontend_bucket` | 1 | Chỉ CloudFront service principal của distribution này được `s3:GetObject`. |
-| `aws_s3_bucket_policy.frontend` | 1 | Gắn policy OAC vào bucket. |
-| CloudFront managed policy data sources | 3 | Cache optimized cho S3, caching disabled cho API và viewer request policy không forward Host header. |
-
-## Luồng và hành vi
-
-### S3 static origin
-
-- Bucket không public, không cấu hình S3 website endpoint.
-- CloudFront truy cập bucket bằng OAC SigV4.
-- Bucket policy giới hạn `AWS:SourceArn` đúng distribution ARN.
-- Default behavior dùng managed `Managed-CachingOptimized`, cho phép `GET`, `HEAD`, `OPTIONS` và redirect viewer HTTP sang HTTPS.
-
-### ALB API origin
-
-- Ordered behavior chỉ match `/api/*`.
-- Environment `dev` kết nối ALB bằng `http-only` qua DNS name AWS cấp.
-- CloudFront gửi custom header `X-Origin-Verify` cùng secret value; ALB listener kiểm tra lại header này.
-- API dùng `Managed-CachingDisabled` và cho phép các HTTP methods cần cho API; Host header mặc định không forward nguyên trạng.
-- Production có thể dùng `https-only` với hostname và certificate regional phù hợp.
-
-### Viewer domain và certificate
-
-- Khi `cloudfront_aliases = []` và `cloudfront_certificate_arn = null`, CloudFront dùng hostname mặc định và certificate mặc định.
-- Khi truyền custom aliases, module yêu cầu certificate ARN tương ứng; certificate phải được cấp ở `us-east-1`.
-- Module không tạo ACM certificate, DNS validation record, hosted zone hoặc alias DNS record.
-
-## Inputs
-
-| Name | Type | Required | Default | Mục đích |
-|---|---|---:|---|---|
-| `project_name` | `string` | Yes | - | Prefix tên resource. |
-| `environment` | `string` | Yes | - | Tên môi trường. |
-| `alb_origin_dns_name` | `string` | Yes | - | DNS name CloudFront dùng để kết nối ALB. |
-| `alb_origin_protocol_policy` | `string` | Yes | - | `http-only` cho dev hoặc `https-only` cho production. |
-| `cloudfront_aliases` | `list(string)` | No | `[]` | Custom viewer aliases; để rỗng cho hostname mặc định. |
-| `cloudfront_certificate_arn` | `string` | No | `null` | ACM certificate `us-east-1` cho custom viewer domain. |
-| `cloudfront_price_class` | `string` | No | `PriceClass_100` | Price class của distribution. |
-| `origin_custom_header_name` | `string` | No | `X-Origin-Verify` | Header CloudFront gửi tới ALB. |
-| `origin_custom_header_value` | `string` | Yes | - | Secret value dùng chung với ALB. |
-| `bucket_force_destroy` | `bool` | No | `false` | Cho phép xóa object khi destroy bucket. |
-
-Module không nhận `tags`. Provider environment áp dụng `Project`, `Environment`, `ManagedBy`; module thêm `Name`, `Component` và `Tier` cho resource taggable.
-
-## Outputs
-
-| Output | Consumer | Ý nghĩa |
-|---|---|---|
-| `bucket_id` | Upload pipeline/environment | Tên S3 bucket frontend. |
-| `bucket_arn` | Audit/policy tooling | ARN bucket frontend. |
-| `cloudfront_distribution_id` | Deploy/invalidation pipeline | ID distribution. |
-| `cloudfront_distribution_arn` | Audit/IAM | ARN distribution. |
-| `cloudfront_domain_name` | Người dùng/vận hành | Hostname mặc định do CloudFront cấp; custom alias là cấu hình riêng. |
-| `origin_access_control_id` | Audit/vận hành | ID OAC gắn với S3 origin. |
-
-## Dependencies
+## Mục tiêu sử dụng
 
 ```text
-ALB ──────────────────► ALB DNS name và origin protocol contract
-environment variables ─► header, protocol, price class, force_destroy
-                              │
-                              ▼
-                           frontend
-                              ├──► CloudFront default domain
-                              └──► private S3 bucket
+Browser → https://<distribution>.cloudfront.net/ → CloudFront → S3 private
 ```
 
-Environment `dev` truyền `module.alb.alb_dns_name` làm origin hostname của CloudFront và dùng `http-only`; module không tạo DNS record.
+## Drift cần xử lý
 
-## Checklist và evidence
+Module có feature flag `enable_api_origin`. Khi `false`, CloudFront chỉ có S3 origin và
+không tạo ordered behavior `/api/*`; khi `true`, module hỗ trợ contract cũ `CloudFront → ALB
+HTTP/HTTPS`. Đây là điểm cần xem xét nếu environment production cần API qua CloudFront.
 
-| Hạng mục | Trạng thái | Evidence | Validation |
-|---|---|---|---|
-| Private S3 bucket với public access block | Implemented | `main.tf:24`, `main.tf:37` | `terraform fmt -check` — Pass; composition validate bị database block |
-| Ownership enforced, versioning và SSE-S3 | Implemented | `main.tf:48`, `main.tf:58`, `main.tf:68` | `terraform fmt -check` — Pass; composition validate bị database block |
-| OAC SigV4 và bucket policy giới hạn SourceArn | Implemented | `main.tf:80`, `main.tf:173` | `terraform fmt -check` — Pass; composition validate bị database block |
-| CloudFront S3 default behavior | Implemented | `main.tf:90`, `main.tf:121` | `terraform fmt -check` — Pass; composition validate bị database block |
-| CloudFront `/api/*` tới ALB bằng HTTP và custom header | Implemented | `main.tf:103`, `main.tf:107`, `main.tf:131` | `terraform fmt -check` — Pass; composition validate bị provider block |
-| Default viewer domain/certificate hiện tại | Implemented | `main.tf:148`, `main.tf:150` | `terraform fmt -check` — Pass; composition validate bị database block |
-| Custom viewer domain có guard alias/certificate | Implemented | `variables.tf:26`, `main.tf:161` | `terraform fmt -check` — Pass; composition validate bị database block |
-| Outputs và environment wiring | Implemented | `outputs.tf:1`, `environments/dev/main.tf:98`, `environments/dev/outputs.tf:81` | `terraform fmt -check` — Pass; composition validate bị database block |
-| Dev origin HTTP dùng ALB DNS name | Implemented | `environments/dev/main.tf` | Chưa xác minh trên AWS; chưa chạy apply |
-| Route 53 hosted zone/alias cho viewer domain | Not in scope | DNS và alias record không do module tạo; custom viewer domain là future | Chưa xác minh |
+## Inputs/outputs chính
 
-## Kiểm tra
+- Identity: `project_name`, `environment`.
+- Optional API origin: `enable_api_origin`, `alb_origin_dns_name`, `alb_origin_protocol_policy`.
+- Viewer: `cloudfront_aliases`, `cloudfront_certificate_arn`, `cloudfront_price_class`.
+- S3: `bucket_force_destroy`.
+- Custom header legacy: `origin_custom_header_name`, `origin_custom_header_value`.
 
-```bash
-terraform -chdir=environments/dev fmt -check -recursive
-terraform -chdir=environments/dev validate
-```
+Custom viewer domain và ACM certificate `us-east-1` không thuộc module. Dev dùng default
+CloudFront domain nên không cần custom domain.
 
-Các lệnh trên chỉ kiểm tra format/schema; không xác nhận CloudFront distribution, S3 bucket, DNS hay ACM certificate đã tồn tại. Không chạy `terraform apply` hoặc `terraform destroy` trong review module.
+## Trạng thái
+
+| Hạng mục | Trạng thái |
+|---|---|
+| Private S3 + OAC + static CloudFront | Current |
+| Default CloudFront HTTPS | Current |
+| Disable ALB origin/API behavior khỏi dev | Implemented bằng feature flag, chưa apply |
+| Frontend upload/invalidation | Not in scope |
+| CORS/API base URL | Application responsibility |

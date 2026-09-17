@@ -45,6 +45,19 @@ variable "listener_port" {
   type        = number
 }
 
+variable "enable_https_listener" {
+  description = "Whether to create the optional HTTPS listener used by the ALB test path."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
+variable "https_certificate_arn" {
+  description = "ACM certificate ARN for the optional HTTPS listener."
+  type        = string
+  default     = null
+}
+
 variable "origin_custom_header_name" {
   description = "Header name checked by the listener rule."
   type        = string

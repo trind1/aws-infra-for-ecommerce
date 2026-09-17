@@ -47,6 +47,16 @@ output "alb_dns_name" {
   value       = module.alb.alb_dns_name
 }
 
+output "alb_https_listener_arn" {
+  description = "ARN of the optional ALB HTTPS test listener, or null when disabled."
+  value       = module.alb.https_listener_arn
+}
+
+output "alb_imported_certificate_arn" {
+  description = "ARN of the optional imported ACM certificate used by the ALB HTTPS test listener."
+  value       = var.enable_alb_https_test ? module.alb_imported_certificate[0].certificate_arn : null
+}
+
 output "api_target_group_arn" {
   description = "ARN of the API target group used by the compute Auto Scaling Group."
   value       = module.alb.target_group_arn

@@ -4,7 +4,7 @@
 
 Cung cấp một Amazon RDS PostgreSQL private, Single-AZ cho application tier. Database nằm trong đúng hai database subnets do `network` xuất ra, sử dụng database security group do `security-groups` quản lý và không mở truy cập trực tiếp từ Internet.
 
-Module chỉ quản lý database foundation và connection metadata. Module không tạo Route 53, Secrets Manager secret, read replica, RDS cluster hoặc Multi-AZ standby.
+Module chỉ quản lý database foundation và connection metadata. Module không tạo Route 53, Secrets Manager secret, read replica, cluster hoặc Multi-AZ standby.
 
 ## Dịch vụ và cấu hình
 

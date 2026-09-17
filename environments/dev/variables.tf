@@ -133,6 +133,56 @@ variable "alb_deletion_protection" {
   nullable    = false
 }
 
+variable "enable_alb_https_test" {
+  description = "Whether to create an optional HTTPS listener on the ALB using an imported local certificate."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
+variable "alb_https_certificate_file" {
+  description = "Local path to the PEM certificate body for the optional ALB HTTPS test listener."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = !var.enable_alb_https_test || var.alb_https_certificate_file != null
+    error_message = "alb_https_certificate_file is required when enable_alb_https_test is true."
+  }
+}
+
+variable "alb_https_private_key_file" {
+  description = "Local path to the PEM private key for the optional ALB HTTPS test listener."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = !var.enable_alb_https_test || var.alb_https_private_key_file != null
+    error_message = "alb_https_private_key_file is required when enable_alb_https_test is true."
+  }
+}
+
+variable "alb_https_certificate_version" {
+  description = "Version incremented when the local ALB HTTPS certificate is rotated."
+  type        = number
+  default     = 1
+  nullable    = false
+}
+
+variable "alb_https_client_cidr_blocks" {
+  description = "Client CIDR blocks allowed to reach the optional ALB HTTPS test listener."
+  type        = set(string)
+  default     = []
+  nullable    = false
+
+  validation {
+    condition = alltrue([
+      for cidr in var.alb_https_client_cidr_blocks : can(cidrhost(cidr, 0))
+    ])
+    error_message = "alb_https_client_cidr_blocks must contain valid CIDR blocks."
+  }
+}
+
 variable "cloudfront_alb_header_name" {
   description = "Name of the private header CloudFront sends to the ALB origin."
   type        = string
@@ -167,6 +217,13 @@ variable "cloudfront_price_class" {
     condition     = contains(["PriceClass_All", "PriceClass_100", "PriceClass_200"], var.cloudfront_price_class)
     error_message = "cloudfront_price_class must be PriceClass_All, PriceClass_100 or PriceClass_200."
   }
+}
+
+variable "enable_cloudfront_api" {
+  description = "Whether CloudFront should route /api/* to the ALB; false for the direct ALB API architecture."
+  type        = bool
+  default     = false
+  nullable    = false
 }
 
 variable "cloudfront_alb_origin_protocol_policy" {
@@ -388,30 +445,16 @@ variable "compute_health_check_grace_period_seconds" {
   nullable    = false
 }
 
-variable "application_artifact_bucket" {
-  description = "S3 bucket containing the API deployment artifact."
+variable "application_docker_image" {
+  description = "Docker Hub image URI, including a fixed version tag, for the API container."
   type        = string
-  default     = null
-}
 
-variable "application_artifact_key" {
-  description = "Object key of the API deployment artifact."
-  type        = string
-  default     = null
-}
-
-variable "application_log_file" {
-  description = "Application log filename written by the API systemd service."
-  type        = string
-  default     = "application.log"
-  nullable    = false
-}
-
-variable "application_start_command" {
-  description = "Command used by instance bootstrap to start the API."
-  type        = string
-  default     = "/usr/bin/node /opt/nodejs-api/server.js"
-  nullable    = false
+  validation {
+    condition = trimspace(var.application_docker_image) != "" && !strcontains(var.application_docker_image, " ") && (
+      strcontains(var.application_docker_image, ":") || strcontains(var.application_docker_image, "@sha256:")
+    )
+    error_message = "application_docker_image must be a non-empty image URI without spaces and include a fixed tag or digest."
+  }
 }
 
 # ============================================================

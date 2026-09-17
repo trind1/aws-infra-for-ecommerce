@@ -54,11 +54,6 @@ locals {
         files = {
           collect_list = [
             {
-              file_path       = "/var/log/${local.instance_name}/${var.api_log_file}"
-              log_group_name  = var.api_log_group_name
-              log_stream_name = "{instance_id}/application"
-            },
-            {
               file_path       = "/var/log/cloud-init-output.log"
               log_group_name  = var.system_log_group_name
               log_stream_name = "{instance_id}/cloud-init"
@@ -117,25 +112,6 @@ resource "aws_iam_role_policy" "cloudwatch" {
   policy = data.aws_iam_policy_document.cloudwatch.json
 }
 
-# ============ OPTIONAL ARTIFACT IAM POLICY  ============
-data "aws_iam_policy_document" "artifact" {
-  count = var.api_artifact_s3_bucket != null && var.api_artifact_s3_key != null ? 1 : 0
-
-  statement {
-    sid       = "ReadApiArtifact"
-    effect    = "Allow"
-    actions   = ["s3:GetObject"]
-    resources = ["arn:${data.aws_partition.current.partition}:s3:::${var.api_artifact_s3_bucket}/${var.api_artifact_s3_key}"]
-  }
-}
-
-resource "aws_iam_role_policy" "artifact" {
-  count  = var.api_artifact_s3_bucket != null && var.api_artifact_s3_key != null ? 1 : 0
-  name   = "${local.name}-artifact-read"
-  role   = aws_iam_role.api.id
-  policy = data.aws_iam_policy_document.artifact[0].json
-}
-
 # ============ OPTIONAL DATABASE SECRET IAM POLICY  ============
 data "aws_iam_policy_document" "database_secret" {
   count = var.database_credentials_secret_arn == null ? 0 : 1
@@ -174,14 +150,12 @@ resource "aws_launch_template" "api" {
   instance_type          = var.instance_type
   update_default_version = true
   user_data = base64encode(templatefile("${path.module}/user_data.sh.tftpl", {
-    api_artifact_s3_bucket          = coalesce(var.api_artifact_s3_bucket, "")
-    api_artifact_s3_key             = coalesce(var.api_artifact_s3_key, "")
-    api_log_file                    = var.api_log_file
     api_log_group_name              = var.api_log_group_name
-    api_start_command               = var.api_start_command
+    aws_region                      = data.aws_region.current.region
     app_name                        = local.instance_name
     app_port                        = var.app_port
     cloudwatch_agent_config         = local.cloudwatch_agent_config
+    docker_image                    = var.docker_image
     database_credentials_secret_arn = coalesce(var.database_credentials_secret_arn, "")
     database_host                   = var.database_host
     database_name                   = var.database_name

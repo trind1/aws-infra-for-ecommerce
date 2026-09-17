@@ -8,11 +8,6 @@ locals {
   compute_asg_name = "${local.monitoring_name}-api-asg"
 }
 
-# AWS maintains this prefix list in the current provider region.
-data "aws_ec2_managed_prefix_list" "cloudfront" {
-  name = "com.amazonaws.global.cloudfront.origin-facing"
-}
-
 # Amazon Linux 2023 x86_64 AMI published by AWS for the current region.
 # The compute bootstrap installs the amd64 CloudWatch Agent package.
 data "aws_ssm_parameter" "amazon_linux_2023_ami" {
@@ -45,13 +40,27 @@ module "security_groups" {
   project_name = var.project_name
   environment  = var.environment
 
-  vpc_id                           = module.network.vpc_id
-  cloudfront_origin_prefix_list_id = data.aws_ec2_managed_prefix_list.cloudfront.id
-  alb_listener_port                = var.alb_listener_port
-  application_port                 = var.application_port
-  database_port                    = var.database_port
+  vpc_id                       = module.network.vpc_id
+  alb_https_client_cidr_blocks = var.alb_https_client_cidr_blocks
+  application_port             = var.application_port
+  database_port                = var.database_port
 
   # Common tags are applied by the provider default_tags configuration.
+}
+
+# ============================================================
+# MODULE: IMPORTED ALB TEST CERTIFICATE
+# ============================================================
+module "alb_imported_certificate" {
+  count  = var.enable_alb_https_test ? 1 : 0
+  source = "../../modules/certificates-imported"
+
+  project_name = var.project_name
+  environment  = var.environment
+
+  certificate_file    = var.alb_https_certificate_file
+  private_key_file    = var.alb_https_private_key_file
+  certificate_version = var.alb_https_certificate_version
 }
 
 # ============================================================
@@ -71,6 +80,9 @@ module "alb" {
   health_check_path = var.alb_health_check_path
   listener_port     = var.alb_listener_port
 
+  enable_https_listener = var.enable_alb_https_test
+  https_certificate_arn = var.enable_alb_https_test ? module.alb_imported_certificate[0].certificate_arn : null
+
   origin_custom_header_name  = var.cloudfront_alb_header_name
   origin_custom_header_value = var.cloudfront_alb_header_value
 
@@ -87,7 +99,8 @@ module "frontend" {
   project_name = var.project_name
   environment  = var.environment
 
-  alb_origin_dns_name        = module.alb.alb_dns_name
+  enable_api_origin          = var.enable_cloudfront_api
+  alb_origin_dns_name        = var.enable_cloudfront_api ? module.alb.alb_dns_name : null
   alb_origin_protocol_policy = var.cloudfront_alb_origin_protocol_policy
 
   cloudfront_aliases         = []
@@ -159,10 +172,7 @@ module "compute" {
   cpu_target_value          = var.compute_cpu_target_percent
   health_check_grace_period = var.compute_health_check_grace_period_seconds
 
-  api_artifact_s3_bucket = var.application_artifact_bucket
-  api_artifact_s3_key    = var.application_artifact_key
-  api_start_command      = var.application_start_command
-  api_log_file           = var.application_log_file
+  docker_image = var.application_docker_image
 
   api_log_group_name    = module.monitoring.api_log_group_name
   system_log_group_name = module.monitoring.system_log_group_name

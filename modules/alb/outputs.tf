@@ -28,12 +28,7 @@ output "load_balancer_arn_suffix" {
   value       = aws_lb.this.arn_suffix
 }
 
-output "listener_arn" {
-  description = "API HTTP listener ARN."
-  value       = aws_lb_listener.api.arn
-}
-
-output "listener_port" {
-  description = "Effective ALB HTTP listener port."
-  value       = aws_lb_listener.api.port
+output "https_listener_arn" {
+  description = "ARN of the optional ALB HTTPS test listener, or null when disabled."
+  value       = var.enable_https_listener ? aws_lb_listener.api_https_test[0].arn : null
 }
