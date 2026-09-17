@@ -1,6 +1,17 @@
+/*
+CURRENT DEV STATUS:
+This module is not used by environments/dev. Dev uses
+modules/certificates-imported for the local self-signed ALB certificate.
+The Terraform configuration is intentionally commented out, not deleted,
+so it can be restored later for a public-domain environment.
+
 locals {
   name = "${var.project_name}-${var.environment}"
 }
+
+# NOTE: This module is not consumed by environments/dev.
+# dev uses modules/certificates-imported for the local self-signed ALB certificate.
+# The resources below remain active for future environments with public domains.
 
 # ============ ALB REGIONAL CERTIFICATE  ============
 
@@ -42,6 +53,8 @@ resource "aws_acm_certificate_validation" "alb" {
   validation_record_fqdns = [for record in aws_route53_record.alb_validation : record.fqdn]
 }
 
+# FUTURE FOR DEV: Custom CloudFront viewer certificate requires a public domain,
+# DNS validation and an ACM certificate in us-east-1.
 # ============ CLOUDFRONT VIEWER CERTIFICATE  ============
 
 # CloudFront accepts a custom viewer certificate only from us-east-1.
@@ -86,3 +99,4 @@ resource "aws_acm_certificate_validation" "cloudfront" {
   certificate_arn         = aws_acm_certificate.cloudfront[0].arn
   validation_record_fqdns = [for record in aws_route53_record.cloudfront_validation : record.fqdn]
 }
+*/

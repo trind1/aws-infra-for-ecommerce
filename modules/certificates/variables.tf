@@ -1,3 +1,8 @@
+/*
+CURRENT DEV STATUS:
+These inputs belong to the unused public-domain certificate module.
+Dev uses modules/certificates-imported instead.
+
 variable "project_name" {
   description = "Project identifier used in resource names."
   type        = string
@@ -7,6 +12,10 @@ variable "environment" {
   description = "Environment identifier used in resource names."
   type        = string
 }
+
+# These inputs are intentionally not supplied by environments/dev.
+# dev uses modules/certificates-imported because its ALB hostname is local and
+# its certificate is generated locally instead of being issued by a public CA.
 
 variable "alb_origin_domain" {
   description = "Hostname that CloudFront uses to connect to the ALB over HTTPS."
@@ -33,6 +42,7 @@ variable "alb_certificate_ready" {
   nullable    = false
 }
 
+# FUTURE FOR DEV: Keep disabled until a public CloudFront custom domain exists.
 variable "enable_custom_viewer_domain" {
   description = "Whether to request a future custom viewer-domain certificate for CloudFront."
   type        = bool
@@ -65,3 +75,4 @@ variable "cloudfront_certificate_ready" {
   default     = false
   nullable    = false
 }
+*/

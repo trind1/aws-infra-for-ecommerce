@@ -1,3 +1,11 @@
+# These outputs belong to the public-domain/future certificate flow.
+# environments/dev does not consume this module or these outputs.
+
+/*
+CURRENT DEV STATUS:
+These outputs belong to the unused public-domain certificate module.
+Dev consumes certificate_arn from modules/certificates-imported instead.
+
 output "alb_certificate_arn" {
   description = "Issued regional ACM certificate ARN for the ALB origin, or null until external validation is confirmed."
   value = var.alb_route53_zone_id != null ? (
@@ -39,3 +47,4 @@ output "cloudfront_certificate_validation_records" {
     }
   ] : []
 }
+*/
