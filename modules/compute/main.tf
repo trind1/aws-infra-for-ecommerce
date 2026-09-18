@@ -142,7 +142,6 @@ resource "aws_launch_template" "api" {
     api_cors_origin               = var.api_cors_origin
     database_connection_limit     = var.database_connection_limit
     database_pool_timeout_seconds = var.database_pool_timeout_seconds
-    environment                   = var.environment
   }))
 
   iam_instance_profile {

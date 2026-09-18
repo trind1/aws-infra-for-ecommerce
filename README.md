@@ -1,118 +1,148 @@
 # AWS infrastructure for e-commerce
 
-Terraform project triển khai một hệ thống e-commerce đơn giản trên AWS, gồm frontend tĩnh, Node.js API và PostgreSQL database.
+Repository này chứa Terraform infrastructure cho môi trường `dev` của ứng dụng
+e-commerce gồm frontend tĩnh, Node.js API và PostgreSQL trên AWS.
 
-> Hiện repository chỉ có composition cho môi trường `dev` tại [`environments/dev`](environments/dev). Đây là infrastructure baseline; chưa bao gồm pipeline build/deploy ứng dụng và chưa nên dùng trực tiếp cho production.
+Terraform chỉ tạo hạ tầng và bootstrap EC2. Build/push Docker image, chạy Prisma
+migration, provision admin và upload frontend là các bước triển khai sau `terraform apply`.
 
-## Kiến trúc
+## Kiến trúc hiện tại
 
 ```text
-                         HTTPS
- User ─────────────────────────────► CloudFront
-                                      │
-                         ┌────────────┴────────────┐
-                         │                         │
-                    Frontend                    API /api/*
-                         │                  HTTP + custom header
-                         ▼                         ▼
-                 S3 private + OAC              ALB HTTP :80
-                                                     │
-                                             HTTP nội bộ :3000
-                                                     ▼
-                                           EC2 Auto Scaling Group
-                                                     │
-                                             PostgreSQL :5432
-                                                     ▼
-                                                RDS private
+Browser
+├── https://<cloudfront-domain>/
+│   └── CloudFront → S3 private + OAC → frontend static files
+│
+└── https://e-commerce-ndt.test/api/...
+    └── ALB HTTPS :443
+        └── EC2 Auto Scaling Group → Docker nodejs-api :3000
+            └── RDS PostgreSQL :5432
 ```
 
-### Các thành phần chính
+Frontend và API dùng hai hostname khác nhau:
 
-- **CloudFront:** điểm truy cập HTTPS cho người dùng.
-- **S3 private:** lưu frontend build; chỉ CloudFront đọc qua Origin Access Control (OAC).
-- **ALB:** nhận API traffic từ CloudFront, kiểm tra custom header và forward tới EC2.
-- **EC2 Auto Scaling Group:** chạy Node.js API trên hai Availability Zones.
-- **RDS PostgreSQL:** database private, hiện cấu hình Single-AZ.
-- **CloudWatch:** lưu logs, custom metrics và alarms.
+- CloudFront default domain phục vụ frontend.
+- `e-commerce-ndt.test` là local/test API domain, cần cấu hình DNS thủ công trên máy test.
+- API phải cho phép CORS từ CloudFront origin.
+- `enable_cloudfront_api = false` trong `dev`, nên CloudFront không proxy `/api/*`.
+- ALB HTTP rule và CloudFront API path cũ vẫn được giữ làm rollback path; direct API dùng
+  ALB HTTPS rule trên port `443`.
 
-### Network
+`e-commerce-ndt.test` chưa được Terraform quản lý DNS. Trước khi ALB tồn tại cũng chưa
+biết được DNS name AWS cấp; lấy giá trị đó từ Terraform output sau `apply`.
 
-- Một VPC với hai Availability Zones.
-- Public subnets chứa ALB và EC2.
-- Private database subnets chứa RDS.
-- Không tạo NAT Gateway; EC2 dùng public IPv4 để bootstrap và outbound.
-- Security group giới hạn luồng `CloudFront → ALB → EC2 → RDS`.
+## Các thành phần
 
-## Cấu trúc repository
+| Thành phần | Trách nhiệm |
+|---|---|
+| `network` | VPC, public subnets, private database subnets và route tables |
+| `security-groups` | Luồng ALB → EC2 → RDS |
+| `alb` | ALB, target group port `3000`, health check `/health`, HTTP và HTTPS test listener |
+| `frontend` | S3 private, versioning, SSE-S3, OAC và CloudFront |
+| `database` | RDS PostgreSQL private, backups và database logs |
+| `compute` | IAM, SSM, Launch Template, Docker bootstrap, ASG và CPU scaling |
+| `monitoring` | CloudWatch log groups, Docker/system logs, metrics và alarms |
+
+## Repository layout
 
 ```text
 .
-├── environments/dev/       # Root composition hiện tại
-├── modules/                # Các Terraform module dùng chung
-└── docs/                   # Kiến trúc, contract module và cost estimate
+├── environments/dev/              # Root Terraform composition
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   ├── terraform.tfvars.example
+│   └── admin-provision.env.example
+├── modules/                        # Terraform modules
+├── scripts/
+│   ├── generate-alb-self-signed-cert.sh
+│   ├── run-db-migration.sh
+│   └── provision-admin.sh
+└── docs/deployment/dev-apply-runbook.md
 ```
 
-## Terraform modules
+## Yêu cầu trước khi triển khai
 
-| Module | Trách nhiệm |
-|---|---|
-| [`network`](modules/network) | VPC, public/database subnets, route tables và Internet Gateway |
-| [`security-groups`](modules/security-groups) | Security groups và rules giữa các tầng |
-| [`certificates`](modules/certificates) | Module certificate reusable cho các environment HTTPS; không dùng trong dev hiện tại |
-| [`alb`](modules/alb) | Internet-facing ALB, HTTP listener, target group và API rule |
-| [`frontend`](modules/frontend) | S3 private, OAC, CloudFront distribution và API origin |
-| [`database`](modules/database) | DB subnet group, RDS PostgreSQL và RDS logs |
-| [`compute`](modules/compute) | IAM, Launch Template, EC2 ASG, bootstrap và CPU scaling |
-| [`monitoring`](modules/monitoring) | CloudWatch log groups, metric filters và alarms |
+Máy deploy cần có:
 
-Environment [`environments/dev/main.tf`](environments/dev/main.tf) chịu trách nhiệm nối các module với nhau.
+- Terraform `>= 1.5.0`.
+- AWS CLI và credentials đúng AWS account/region.
+- Docker để build và push API image.
+- Quyền IAM tạo VPC, ALB, EC2/ASG, RDS, S3, CloudFront, ACM import và CloudWatch.
+- AWS region phù hợp với các Availability Zone trong `terraform.tfvars`.
 
-## Kiểm tra cấu hình
+App repository cần chuẩn bị:
 
-Yêu cầu:
+- Docker image API cho `linux/amd64`.
+- Image có tag cố định, không dùng `latest`.
+- Image chứa Prisma migration files.
+- Image có script `db:deploy` và `auth/provision-admin.js`.
+- Frontend build dùng:
 
-- Terraform `>= 1.5.0`
-- AWS provider `~> 6.0`
-- AWS credentials phù hợp nếu chạy `plan`
+```ini
+VITE_API_URL=https://e-commerce-ndt.test/api
+```
 
-Chạy kiểm tra format và schema:
+## Secret và file local
+
+Các file thật sau đây chỉ tồn tại local và không được commit:
+
+- `environments/dev/terraform.tfvars`
+- `environments/dev/admin-provision.env`
+- `environments/dev/local-certs/alb.key.pem`
+- Terraform state và plan files
+
+Bảo vệ file input:
 
 ```bash
-terraform version
-terraform -chdir=environments/dev init -backend=false
-terraform fmt -check -recursive
-terraform -chdir=environments/dev validate
+chmod 600 environments/dev/terraform.tfvars
+chmod 600 environments/dev/admin-provision.env
 ```
 
-Một số input bắt buộc phải được cấp từ biến môi trường, CI secret hoặc file `.tfvars` local, gồm:
+Dev hiện dùng local Terraform state, không dùng remote S3 backend. Vì vậy không dùng
+local state cho team hoặc production. State và `terraform.tfvars` có thể chứa secret và
+phải được bảo vệ như dữ liệu nhạy cảm.
 
-- `cloudfront_alb_header_value`
-- `database_password`
+## Quy trình triển khai
 
-CloudFront origin-facing managed prefix list được Terraform tự động tra cứu theo AWS region hiện tại, nên không cần cung cấp `cloudfront_origin_prefix_list_id` thủ công.
-AMI Amazon Linux 2023 x86_64 cho compute được Terraform lấy từ public SSM Parameter theo region hiện tại.
+Quy trình đầy đủ nằm tại [docs/deployment/dev-apply-runbook.md](docs/deployment/dev-apply-runbook.md).
 
-Không commit password, custom header value, credentials, state, plan hoặc file `terraform.tfvars`.
+Tóm tắt:
 
-## State và triển khai
+1. Build và push API Docker image.
+2. Tạo certificate test và cấu hình client CIDR.
+3. Điền `terraform.tfvars` và tạo custom CloudFront header secret.
+4. Chạy `init`, `fmt`, `validate`, `plan` và review plan.
+5. Apply đúng plan đã review.
+6. Cấu hình DNS local cho `e-commerce-ndt.test`.
+7. Chạy migration một lần qua SSM.
+8. Provision admin một lần qua SSM.
+9. Build/upload frontend và invalidate CloudFront.
+10. Kiểm tra ALB, EC2, RDS, CORS, CloudWatch logs và alarms.
 
-Hiện root module chưa khai báo remote backend. Vì vậy không nên dùng local state cho team hoặc production. Trước khi triển khai thật, cần bổ sung remote backend có encryption, locking, versioning và access control; sau đó tạo plan artifact để review trước khi apply.
+Các lệnh sau `apply` không được đặt trong `user_data`:
 
-Environment `dev` dùng trực tiếp DNS name AWS cấp cho ALB làm CloudFront HTTP origin; không cần domain hoặc ACM certificate. Việc upload frontend/API artifact hiện nằm ngoài Terraform composition này.
+- `docker exec nodejs-api npm run db:deploy`
+- `node apps/api/dist/auth/provision-admin.js`
 
-## Giới hạn hiện tại
+Lý do là ASG có thể khởi động nhiều EC2; migration và admin provisioning chỉ chạy trên
+một instance/runner duy nhất.
 
-- EC2 đang ở public subnets và có public IPv4 để bootstrap.
-- RDS đang là Single-AZ; chưa có Multi-AZ/read replica/DR workflow.
-- RDS password và custom origin header có thể xuất hiện trong Terraform state; backend phải được bảo vệ như dữ liệu nhạy cảm.
-- CloudFront → ALB dùng HTTP cho dev/test; production cần environment riêng với HTTPS origin và certificate regional.
-- Chưa có WAF, CI/CD workflow, policy-as-code hoặc security scanner trong repository.
-- Frontend/API artifact upload và CloudFront invalidation chưa được quản lý ở đây.
+## Giới hạn dev
 
-## Tài liệu
+- EC2 nằm trong public subnets và dùng public IPv4 để bootstrap/pull image.
+- RDS là Single-AZ mặc định.
+- ALB HTTPS dev dùng certificate self-signed được import vào ACM.
+- DNS API là local/manual, chưa có Route 53 resource.
+- Terraform state là local.
+- Chưa có WAF, CI/CD, Secrets Manager, remote backend hoặc production DR workflow.
+- Docker logs đi trực tiếp tới CloudWatch bằng `awslogs` driver; CloudWatch Agent xử lý
+  system log và metrics của EC2.
 
-- [Sơ đồ kiến trúc dùng thuyết trình](docs/architecture/README.md)
-- [Kiến trúc tổng thể](docs/components/README.md)
-- [Kế hoạch và contract cấu hình](docs/configuration/README.md)
+## Tài liệu liên quan
+
+- [Dev apply runbook](docs/deployment/dev-apply-runbook.md)
+- [Architecture](docs/architecture/README.md)
+- [Components](docs/components/README.md)
+- [Configuration](docs/configuration/README.md)
 - [Cost estimation](docs/cost-estimation/README.md)
-- README riêng của từng module trong thư mục [`modules/`](modules)

@@ -18,7 +18,9 @@ fi
 install -d -m 0700 /etc/nodejs-api
 
 cat > /etc/nodejs-api.env <<'API_ENV'
-NODE_ENV=${environment}
+# Terraform environment (for example, "dev") identifies the infrastructure.
+# The API runs as a production Node.js process on the EC2/ALB deployment.
+NODE_ENV=production
 API_HOST=0.0.0.0
 API_PORT=${app_port}
 DATABASE_URL=${api_database_url}
