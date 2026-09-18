@@ -304,10 +304,16 @@ variable "database_password" {
   nullable    = false
 }
 
-variable "database_secret_arn" {
-  description = "Optional ARN of an existing secret for application runtime credentials; it does not configure the RDS master password."
+variable "api_session_hmac_secret" {
+  description = "HMAC secret used by the API to sign sessions."
   type        = string
-  default     = null
+  sensitive   = true
+  nullable    = false
+
+  validation {
+    condition     = length(trimspace(var.api_session_hmac_secret)) >= 32
+    error_message = "api_session_hmac_secret must contain at least 32 characters."
+  }
 }
 
 variable "database_backup_retention_days" {

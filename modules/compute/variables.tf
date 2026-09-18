@@ -102,29 +102,41 @@ variable "metrics_namespace" {
   type        = string
 }
 
-variable "database_host" {
-  description = "RDS endpoint supplied to the API without a password."
+variable "api_database_url" {
+  description = "Complete PostgreSQL connection URL supplied to the API at runtime."
+  type        = string
+  sensitive   = true
+}
+
+variable "api_session_hmac_secret" {
+  description = "HMAC secret used by the API to sign sessions."
+  type        = string
+  sensitive   = true
+}
+
+variable "api_cors_origin" {
+  description = "Browser origin allowed by the API CORS policy."
   type        = string
 }
 
-variable "database_port" {
-  description = "RDS port supplied to the API."
+variable "database_connection_limit" {
+  description = "Maximum number of database connections used by the API."
   type        = number
+  default     = 5
+
+  validation {
+    condition     = var.database_connection_limit > 0
+    error_message = "database_connection_limit must be greater than zero."
+  }
 }
 
-variable "database_name" {
-  description = "Optional database name supplied to the API."
-  type        = string
-  default     = ""
-}
+variable "database_pool_timeout_seconds" {
+  description = "Database pool wait timeout in seconds used by the API."
+  type        = number
+  default     = 10
 
-variable "database_username" {
-  description = "Database username supplied to the API."
-  type        = string
-}
-
-variable "database_credentials_secret_arn" {
-  description = "Optional Secrets Manager ARN read by the API for the database password."
-  type        = string
-  default     = null
+  validation {
+    condition     = var.database_pool_timeout_seconds > 0
+    error_message = "database_pool_timeout_seconds must be greater than zero."
+  }
 }

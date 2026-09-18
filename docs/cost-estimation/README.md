@@ -45,7 +45,6 @@ Các resource dưới đây đã được tính bên trong service cha hoặc kh
 | S3 public-access block, ownership, versioning, encryption | Amazon S3 | Không tạo bucket thứ hai; versioning có thể làm tăng storage thực tế nếu giữ nhiều phiên bản |
 | API artifact bucket | Amazon S3 | Không do repository tạo. Nếu `application_artifact_bucket` là bucket của account này, phải cộng storage, request và data transfer của bucket đó |
 | IAM role, policy, instance profile | Không có service charge trực tiếp | Không nhập |
-| `database_secret_arn` | AWS Secrets Manager nếu secret tồn tại bên ngoài | Module chỉ nhận ARN, không tạo secret; chỉ nhập khi account thực sự sở hữu secret và có usage |
 | ACM ALB certificate và DNS validation record | Không có monthly charge riêng cho public ACM certificate tích hợp | Không nhập ACM như một dịch vụ tính phí |
 | NAT Gateway | Không có trong kiến trúc hiện tại | Không nhập |
 | SNS topic | Không được module này tạo | Chỉ nhập nếu có resource bên ngoài repository |

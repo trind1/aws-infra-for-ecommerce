@@ -11,6 +11,7 @@ crash.*.log
 backend.hcl
 *.tfvars
 !terraform.tfvars.example
+**/admin-provision.env
 
 # Local tooling and editor files
 .DS_Store

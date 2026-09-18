@@ -23,7 +23,9 @@ Module không tạo VPC/subnet/security group, Route 53, ACM certificate, Secret
 
 `username` và `password` là input của module; `password` được đánh dấu `sensitive`. Tuy nhiên, AWS provider có thể ghi giá trị password vào Terraform state khi quản lý `aws_db_instance`. Vì vậy password phải được inject ngoài Git (ví dụ biến môi trường/CI secret) và backend state phải có encryption, access control và audit phù hợp.
 
-Module không đọc hoặc tạo Secrets Manager secret. Nếu application cần `database_secret_arn`, composition layer có thể truyền ARN đó cho module compute ở bước sau; ARN này không tự động cấu hình master password cho RDS.
+Module không đọc hoặc tạo Secrets Manager secret. Composition layer dùng các output
+`db_address` và `db_port` cùng database credentials để dựng `DATABASE_URL` cho compute;
+module database không export connection URL hoặc password.
 
 ## Input chính
 

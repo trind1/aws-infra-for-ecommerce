@@ -27,7 +27,6 @@ Bootstrap nằm trong `user_data.sh.tftpl`: cài Docker, pull image, chạy cont
 | Identity | `aws_iam_role.api`, `aws_iam_instance_profile.api` | EC2 assume role và profile gắn với Launch Template. |
 | Operations | `aws_iam_role_policy_attachment.ssm` | Quản trị instance qua SSM, không cần SSH. |
 | Observability | `aws_iam_role_policy.cloudwatch` | Docker `awslogs` ghi container logs và CloudWatch Agent ghi system logs/publish metrics. |
-| Database secret | `aws_iam_role_policy.database_secret` | Optional đọc secret ARN đã chỉ định ở runtime. |
 | EC2 | `aws_launch_template.api` | AMI, network interface, user data, IMDSv2, monitoring và EBS. |
 | Scaling | `aws_autoscaling_group.api`, `aws_autoscaling_policy.cpu` | Capacity, ALB registration, health và CPU scaling. |
 
@@ -38,7 +37,8 @@ Bootstrap nằm trong `user_data.sh.tftpl`: cài Docker, pull image, chạy cont
 - Không có SSH ingress hoặc key pair path; SSM là kênh quản trị.
 - `http_tokens = "required"` bắt buộc IMDSv2.
 - Root EBS dùng `encrypted = true`, `volume_type = "gp3"` và xóa cùng instance.
-- User data chỉ nhận DB host/port/name/user và secret ARN; không truyền database password.
+- User data nhận runtime `DATABASE_URL` và `SESSION_HMAC_SECRET`; không ghi các giá trị này
+  vào log hoặc output.
 
 ## Bootstrap contract
 
@@ -63,7 +63,8 @@ metrics tới `metrics_namespace`. Hai cơ chế này không đọc cùng một 
 | Scaling | `min_size`, `desired_capacity`, `max_size`, `cpu_target_value`, `health_check_grace_period` |
 | Docker/bootstrap | `docker_image`, `app_port` |
 | Observability | `api_log_group_name`, `system_log_group_name`, `metrics_namespace` |
-| Database runtime | `database_host`, `database_port`, `database_name`, `database_username`, `database_credentials_secret_arn` |
+| API runtime | `api_database_url`, `api_session_hmac_secret`, `api_cors_origin` |
+| Database pool | `database_connection_limit`, `database_pool_timeout_seconds` |
 
 Không có `tags` input; common tags do provider `default_tags` quản lý, module chỉ thêm `Name`, `Component` và `Tier` riêng cho resource/tag propagation.
 
@@ -85,7 +86,6 @@ Module không output user data, password, secret value hoặc IAM policy documen
 |---|---|---|
 | IAM role/profile | Implemented | `main.tf:69`, `main.tf:135` → IAM resources |
 | Least-privilege SSM/logs/metrics permissions | Implemented | `main.tf:81`, `main.tf:87`, `main.tf:109` → policy documents |
-| Optional database secret permission | Implemented | `main.tf:116`, `main.tf:127` → counted policy |
 | Launch Template security settings | Implemented | `main.tf:147` → `aws_launch_template.api` |
 | User data Docker bootstrap và `awslogs` | Implemented | `user_data.sh.tftpl:1`, `user_data.sh.tftpl:29` |
 | Auto Scaling Group và ALB registration | Implemented | `main.tf:223` → `aws_autoscaling_group.api` |
@@ -99,4 +99,5 @@ Module không output user data, password, secret value hoặc IAM policy documen
 - AMI phải có SSM Agent đang chạy hoặc có cơ chế cài/khởi động agent; module chỉ cấp IAM permission.
 - ALB target group đã tồn tại và có health check path tương thích với API.
 - Monitoring log groups đã tồn tại trước bootstrap.
-- Secret ARN, nếu có, là ARN của secret mà application có schema đọc được; module không tạo secret.
+- `api_database_url` và `api_session_hmac_secret` được truyền sensitive từ composition; chúng
+  vẫn có thể xuất hiện trong Terraform state và launch template user data.

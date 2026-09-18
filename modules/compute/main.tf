@@ -112,25 +112,6 @@ resource "aws_iam_role_policy" "cloudwatch" {
   policy = data.aws_iam_policy_document.cloudwatch.json
 }
 
-# ============ OPTIONAL DATABASE SECRET IAM POLICY  ============
-data "aws_iam_policy_document" "database_secret" {
-  count = var.database_credentials_secret_arn == null ? 0 : 1
-
-  statement {
-    sid       = "ReadDatabaseCredentials"
-    effect    = "Allow"
-    actions   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
-    resources = [var.database_credentials_secret_arn]
-  }
-}
-
-resource "aws_iam_role_policy" "database_secret" {
-  count  = var.database_credentials_secret_arn == null ? 0 : 1
-  name   = "${local.name}-database-secret-read"
-  role   = aws_iam_role.api.id
-  policy = data.aws_iam_policy_document.database_secret[0].json
-}
-
 # ============ EC2 INSTANCE PROFILE  ============
 resource "aws_iam_instance_profile" "api" {
   name = local.instance_profile
@@ -150,18 +131,18 @@ resource "aws_launch_template" "api" {
   instance_type          = var.instance_type
   update_default_version = true
   user_data = base64encode(templatefile("${path.module}/user_data.sh.tftpl", {
-    api_log_group_name              = var.api_log_group_name
-    aws_region                      = data.aws_region.current.region
-    app_name                        = local.instance_name
-    app_port                        = var.app_port
-    cloudwatch_agent_config         = local.cloudwatch_agent_config
-    docker_image                    = var.docker_image
-    database_credentials_secret_arn = coalesce(var.database_credentials_secret_arn, "")
-    database_host                   = var.database_host
-    database_name                   = var.database_name
-    database_port                   = var.database_port
-    database_username               = var.database_username
-    environment                     = var.environment
+    api_log_group_name            = var.api_log_group_name
+    aws_region                    = data.aws_region.current.region
+    app_name                      = local.instance_name
+    app_port                      = var.app_port
+    cloudwatch_agent_config       = local.cloudwatch_agent_config
+    docker_image                  = var.docker_image
+    api_database_url              = var.api_database_url
+    api_session_hmac_secret       = var.api_session_hmac_secret
+    api_cors_origin               = var.api_cors_origin
+    database_connection_limit     = var.database_connection_limit
+    database_pool_timeout_seconds = var.database_pool_timeout_seconds
+    environment                   = var.environment
   }))
 
   iam_instance_profile {

@@ -45,7 +45,9 @@ database.aws_db_instance.this
 | `delete_automated_backups`, `apply_immediately`, `auto_minor_version_upgrade` | Environment | Kiểm soát lifecycle và thời điểm áp dụng thay đổi. |
 | `enabled_cloudwatch_logs_exports`, `log_retention_in_days` | Environment | Chọn loại log RDS export và thời gian lưu. |
 
-`database_secret_arn` ở composition layer là credential reference dành cho application runtime/compute. Nó không tự động cấp master password cho RDS; việc đọc secret theo schema cụ thể chưa thuộc phạm vi module này.
+Application runtime hiện dùng cùng `database_username`, `database_password`, database
+name và RDS endpoint để composition dựng `DATABASE_URL`. Module database không tạo hoặc
+export `DATABASE_URL`; password vẫn là input sensitive của RDS và có thể nằm trong state.
 
 ## Output contract
 

@@ -33,7 +33,8 @@ ALB forward HTTP tới host port `3000`; container phải listen trên `0.0.0.0:
 
 - ASG, rolling instance refresh, target group registration và CPU scaling.
 - EC2 instance profile, SSM, IMDSv2 và encrypted gp3.
-- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` và Secrets Manager ARN.
+- `DATABASE_URL`, `SESSION_HMAC_SECRET`, `CORS_ORIGIN` và database pool settings được
+  truyền vào container qua `/etc/nodejs-api.env`.
 - CloudWatch metrics, system logs và application logs qua Docker `awslogs`.
 
 ## Checklist

@@ -6,6 +6,17 @@ locals {
 
   monitoring_name  = "${var.project_name}-${var.environment}"
   compute_asg_name = "${local.monitoring_name}-api-asg"
+
+  api_database_url = format(
+    "postgresql://%s:%s@%s:%d/%s?schema=public&sslmode=require",
+    urlencode(var.database_username),
+    urlencode(var.database_password),
+    module.database.db_address,
+    module.database.db_port,
+    urlencode(var.database_name)
+  )
+
+  api_cors_origin = "https://${module.frontend.cloudfront_domain_name}"
 }
 
 # Amazon Linux 2023 x86_64 AMI published by AWS for the current region.
@@ -178,11 +189,9 @@ module "compute" {
   system_log_group_name = module.monitoring.system_log_group_name
   metrics_namespace     = module.monitoring.metric_namespace
 
-  database_host                   = module.database.db_address
-  database_port                   = module.database.db_port
-  database_name                   = var.database_name
-  database_username               = var.database_username
-  database_credentials_secret_arn = var.database_secret_arn
+  api_database_url        = local.api_database_url
+  api_session_hmac_secret = var.api_session_hmac_secret
+  api_cors_origin         = local.api_cors_origin
 }
 
 # ============================================================

@@ -1,5 +1,7 @@
 #!/bin/bash
-set -euxo pipefail
+set -euo pipefail
+
+umask 077
 
 dnf install -y docker curl
 systemctl enable --now docker
@@ -17,12 +19,13 @@ install -d -m 0700 /etc/nodejs-api
 
 cat > /etc/nodejs-api.env <<'API_ENV'
 NODE_ENV=${environment}
-PORT=${app_port}
-DB_HOST=${database_host}
-DB_PORT=${database_port}
-DB_NAME=${database_name}
-DB_USER=${database_username}
-DB_CREDENTIALS_SECRET_ARN=${database_credentials_secret_arn}
+API_HOST=0.0.0.0
+API_PORT=${app_port}
+DATABASE_URL=${api_database_url}
+SESSION_HMAC_SECRET=${api_session_hmac_secret}
+CORS_ORIGIN=${api_cors_origin}
+DATABASE_CONNECTION_LIMIT=${database_connection_limit}
+DATABASE_POOL_TIMEOUT_SECONDS=${database_pool_timeout_seconds}
 API_ENV
 chmod 600 /etc/nodejs-api.env
 
