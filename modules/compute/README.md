@@ -4,7 +4,7 @@
 
 - Planned: 0
 - In progress: 0
-- Implemented: 8
+- Implemented: 7
 - Validated: 0
 - Blocked: 1
 - Not in scope: 0
@@ -18,7 +18,7 @@ Module tạo runtime cho NodeJS API trên EC2:
 3. Một Auto Scaling Group trải trên các public subnets, gắn vào ALB target group.
 4. Một CPU target-tracking policy và rolling instance refresh.
 
-Bootstrap nằm trong `user_data.sh.tftpl`: cài runtime, tải artifact tùy chọn, tạo systemd service và cấu hình CloudWatch Agent. Module không tạo VPC, subnet, security group, ALB target group, database, log groups hoặc pipeline build artifact.
+Bootstrap nằm trong `user_data.sh.tftpl`: cài Docker, pull image, chạy container và cấu hình CloudWatch Agent. Module không tạo VPC, subnet, security group, ALB target group, database, log groups hoặc pipeline build artifact.
 
 ## Resources và quyền
 
@@ -26,8 +26,7 @@ Bootstrap nằm trong `user_data.sh.tftpl`: cài runtime, tải artifact tùy ch
 |---|---|---|
 | Identity | `aws_iam_role.api`, `aws_iam_instance_profile.api` | EC2 assume role và profile gắn với Launch Template. |
 | Operations | `aws_iam_role_policy_attachment.ssm` | Quản trị instance qua SSM, không cần SSH. |
-| Observability | `aws_iam_role_policy.cloudwatch` | Ghi application/system logs và publish metric namespace đã chỉ định. |
-| Artifact | `aws_iam_role_policy.artifact` | Optional `s3:GetObject` đúng object bucket/key. |
+| Observability | `aws_iam_role_policy.cloudwatch` | Docker `awslogs` ghi container logs và CloudWatch Agent ghi system logs/publish metrics. |
 | Database secret | `aws_iam_role_policy.database_secret` | Optional đọc secret ARN đã chỉ định ở runtime. |
 | EC2 | `aws_launch_template.api` | AMI, network interface, user data, IMDSv2, monitoring và EBS. |
 | Scaling | `aws_autoscaling_group.api`, `aws_autoscaling_policy.cpu` | Capacity, ALB registration, health và CPU scaling. |
@@ -43,13 +42,16 @@ Bootstrap nằm trong `user_data.sh.tftpl`: cài runtime, tải artifact tùy ch
 
 ## Bootstrap contract
 
-Nếu có `api_artifact_s3_bucket` và `api_artifact_s3_key`, user data tải ZIP đúng object rồi cài production dependencies. Nếu thiếu một trong hai, module tạo health-only fallback phục vụ `/health` và `/api/health`; fallback không phải ứng dụng production.
+User data cài Docker, pull `docker_image` và publish host port `app_port` vào container.
+Container phải listen trên `0.0.0.0:<app_port>` và cung cấp health endpoint theo contract
+của ALB.
 
-Systemd chạy command từ `api_start_command`. CloudWatch Agent gửi:
+Docker `awslogs` gửi stdout/stderr của container tới `api_log_group_name` với stream
+`<app_name>/<hostname>`. Log group phải tồn tại trước bootstrap; vì vậy Docker dùng
+`awslogs-create-group=false`.
 
-- API log file tới `api_log_group_name`.
-- `cloud-init-output.log` tới `system_log_group_name`.
-- Memory/disk metrics tới `metrics_namespace`.
+CloudWatch Agent chỉ gửi `cloud-init-output.log` tới `system_log_group_name` và memory/disk
+metrics tới `metrics_namespace`. Hai cơ chế này không đọc cùng một nguồn log.
 
 ## Input chính
 
@@ -59,7 +61,7 @@ Systemd chạy command từ `api_start_command`. CloudWatch Agent gửi:
 | EC2 | `ami_id`, `instance_type`, `root_volume_size`, `detailed_monitoring` |
 | Network/ALB | `subnet_ids`, `security_group_id`, `target_group_arn`, `app_port` |
 | Scaling | `min_size`, `desired_capacity`, `max_size`, `cpu_target_value`, `health_check_grace_period` |
-| Artifact/bootstrap | `api_artifact_s3_bucket`, `api_artifact_s3_key`, `api_start_command`, `api_log_file` |
+| Docker/bootstrap | `docker_image`, `app_port` |
 | Observability | `api_log_group_name`, `system_log_group_name`, `metrics_namespace` |
 | Database runtime | `database_host`, `database_port`, `database_name`, `database_username`, `database_credentials_secret_arn` |
 
@@ -81,13 +83,13 @@ Module không output user data, password, secret value hoặc IAM policy documen
 
 | Hạng mục | Trạng thái | Evidence |
 |---|---|---|
-| IAM role/profile | Implemented | `main.tf:74`, `main.tf:159` → IAM resources |
-| Least-privilege SSM/logs/metrics permissions | Implemented | `main.tf:86`, `main.tf:92`, `main.tf:114` → policy documents |
-| Optional artifact/secret permissions | Implemented | `main.tf:132`, `main.tf:151` → counted policies |
-| Launch Template security settings | Implemented | `main.tf:171` → `aws_launch_template.api` |
-| User data bootstrap | Implemented | `user_data.sh.tftpl:1` |
-| Auto Scaling Group và ALB registration | Implemented | `main.tf:249` → `aws_autoscaling_group.api` |
-| CPU scaling và instance refresh | Implemented | `main.tf:264`, `main.tf:295` → ASG policy/refresh |
+| IAM role/profile | Implemented | `main.tf:69`, `main.tf:135` → IAM resources |
+| Least-privilege SSM/logs/metrics permissions | Implemented | `main.tf:81`, `main.tf:87`, `main.tf:109` → policy documents |
+| Optional database secret permission | Implemented | `main.tf:116`, `main.tf:127` → counted policy |
+| Launch Template security settings | Implemented | `main.tf:147` → `aws_launch_template.api` |
+| User data Docker bootstrap và `awslogs` | Implemented | `user_data.sh.tftpl:1`, `user_data.sh.tftpl:29` |
+| Auto Scaling Group và ALB registration | Implemented | `main.tf:223` → `aws_autoscaling_group.api` |
+| CPU scaling và instance refresh | Implemented | `main.tf:238`, `main.tf:268` → ASG policy/refresh |
 | Stable outputs | Implemented | `outputs.tf:1` |
 | Static/security validation | Blocked | `fmt` pass; provider schema validate blocked; scanners chưa cài |
 

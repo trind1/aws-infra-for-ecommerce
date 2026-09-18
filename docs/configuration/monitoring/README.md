@@ -77,7 +77,8 @@ Các alarm cũng khai báo `unit` tương ứng: `Count` cho count metrics, `Per
 
 ## Output contract
 
-- `api_log_group_name` và `system_log_group_name` cho CloudWatch Agent/compute.
+- `api_log_group_name` cho Docker `awslogs` driver và `system_log_group_name` cho
+  CloudWatch Agent trên compute.
 - `metric_namespace` cho custom application metrics.
 - `alarm_arns` và `alarm_names` theo key ổn định cho vận hành, inventory và notification integration.
 

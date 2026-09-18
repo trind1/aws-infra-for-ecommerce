@@ -86,7 +86,7 @@ resource "aws_iam_role_policy_attachment" "ssm" {
 # ============ CLOUDWATCH IAM POLICY  ============
 data "aws_iam_policy_document" "cloudwatch" {
   statement {
-    sid       = "WriteApplicationAndSystemLogs"
+    sid       = "WriteContainerAndSystemLogs"
     effect    = "Allow"
     actions   = ["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"]
     resources = [local.api_log_group_arn, local.system_log_group_arn]

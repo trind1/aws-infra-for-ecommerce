@@ -63,7 +63,7 @@ Mỗi alarm khai báo rõ `unit` (`Count`, `Percent` hoặc `Bytes`) để Cloud
 
 | Output | Consumer / mục đích |
 |---|---|
-| `api_log_group_name` | CloudWatch Agent gửi application logs |
+| `api_log_group_name` | Docker `awslogs` driver gửi stdout/stderr của API container |
 | `system_log_group_name` | CloudWatch Agent gửi bootstrap/system logs |
 | `metric_namespace` | Compute/application gửi custom metrics |
 | `alarm_arns` | Inventory và vận hành alarm |

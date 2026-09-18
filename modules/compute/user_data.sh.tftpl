@@ -29,6 +29,8 @@ chmod 600 /etc/nodejs-api.env
 docker pull "${docker_image}"
 docker rm -f nodejs-api >/dev/null 2>&1 || true
 
+# The awslogs driver sends container stdout/stderr directly to the Terraform-managed
+# CloudWatch log group. CloudWatch Agent handles only host system logs and metrics.
 docker run --detach \
   --name nodejs-api \
   --restart unless-stopped \
