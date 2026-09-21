@@ -22,6 +22,7 @@ https://e-commerce-ndt.test/api/...
 | CloudFront origin | Chỉ S3 |
 | OAC | SigV4 signing luôn bật |
 | Viewer | HTTPS với default `cloudfront.net` certificate |
+| SPA fallback | CloudFront `403/404` trả `/index.html` với status `200` |
 | API behavior | Không tạo trong environment `dev` mục tiêu |
 | API base URL | `https://e-commerce-ndt.test` |
 
@@ -46,6 +47,7 @@ Environment `dev` đặt `enable_cloudfront_api = false` để API đi trực ti
 | Private S3 + OAC | Current |
 | CloudFront default HTTPS | Current |
 | Static cache behavior | Current |
+| SPA fallback cho client-side routes | Implemented trong CloudFront config, chưa apply |
 | Disable API origin/behavior khỏi dev | Implemented bằng `enable_cloudfront_api = false`, chưa apply |
 | Frontend API base URL | Ngoài Terraform |
 | CORS | Ngoài Terraform |

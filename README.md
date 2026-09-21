@@ -142,6 +142,7 @@ một instance/runner duy nhất.
 ## Tài liệu liên quan
 
 - [Dev apply runbook](docs/deployment/dev-apply-runbook.md)
+- [Dev verification test plan](docs/deployment/dev-verification-test-plan.md)
 - [Architecture](docs/architecture/README.md)
 - [Components](docs/components/README.md)
 - [Configuration](docs/configuration/README.md)

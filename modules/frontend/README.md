@@ -11,6 +11,7 @@ frontend tĩnh. Kiến trúc mục tiêu không dùng CloudFront làm API entry 
 | Public access block/ownership/versioning/encryption | Bảo vệ bucket và rollback artifact |
 | `aws_cloudfront_origin_access_control.frontend` | SigV4 access từ CloudFront tới S3 |
 | `aws_cloudfront_distribution.this` | HTTPS viewer và static caching |
+| CloudFront custom error responses | SPA deep-link fallback về `/index.html` với HTTP `200` |
 | Bucket policy | Chỉ CloudFront distribution được đọc |
 
 ## Mục tiêu sử dụng
@@ -41,6 +42,7 @@ CloudFront domain nên không cần custom domain.
 | Hạng mục | Trạng thái |
 |---|---|
 | Private S3 + OAC + static CloudFront | Current |
+| SPA fallback `403/404 → /index.html` | Current |
 | Default CloudFront HTTPS | Current |
 | Disable ALB origin/API behavior khỏi dev | Implemented bằng feature flag, chưa apply |
 | Frontend upload/invalidation | Not in scope |

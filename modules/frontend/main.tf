@@ -135,6 +135,23 @@ resource "aws_cloudfront_distribution" "this" {
     cached_methods         = ["GET", "HEAD"]
   }
 
+  # ============ SPA FALLBACK ============
+  # S3 returns 403 for missing private objects. Rewrite both missing-object
+  # responses to index.html so client-side routes work through CloudFront.
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 0
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 0
+  }
+
   dynamic "ordered_cache_behavior" {
     for_each = var.enable_api_origin ? [1] : []
 
