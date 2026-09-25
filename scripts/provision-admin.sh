@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+umask 077
 
 # Run once after scripts/run-db-migration.sh succeeds.
 # Credentials can be read from a local, chmod 600 env file and are sent to one
@@ -40,6 +41,11 @@ command -v aws >/dev/null 2>&1 || {
 
 command -v terraform >/dev/null 2>&1 || {
   echo "Terraform is required." >&2
+  exit 1
+}
+
+command -v jq >/dev/null 2>&1 || {
+  echo "jq is required to encode the SSM command parameters as JSON." >&2
   exit 1
 }
 
@@ -135,15 +141,36 @@ remote_commands=(
   "image=\$(docker inspect --format '{{.Config.Image}}' nodejs-api); test -n \"\$image\"; docker run --rm --env-file /opt/ecommerce/admin-provision.env \$image node apps/api/dist/auth/provision-admin.js"
 )
 
-command_list="$(IFS=,; printf '%s' "${remote_commands[*]}")"
+# Use JSON instead of AWS CLI shorthand syntax. The commands contain commas,
+# quotes and shell operators that shorthand parsing cannot represent safely.
+# Keep the request in mode-600 temporary files so credentials are not exposed
+# in the local process argument list or an AWS CLI parse error.
+parameters_file="$(mktemp /tmp/ecommerce-admin-ssm-parameters.XXXXXX)"
+request_file="$(mktemp /tmp/ecommerce-admin-ssm-request.XXXXXX)"
+
+cleanup_local_files() {
+  shred -u "${parameters_file}" "${request_file}" 2>/dev/null || rm -f "${parameters_file}" "${request_file}"
+}
+
+trap cleanup_local_files EXIT
+
+printf '%s\n' "${remote_commands[@]}" \
+  | jq -Rsc 'split("\n")[:-1] | {commands: .}' > "${parameters_file}"
+
+jq -n \
+  --arg instance_id "${INSTANCE_ID}" \
+  --slurpfile parameters "${parameters_file}" \
+  '{
+    InstanceIds: [$instance_id],
+    DocumentName: "AWS-RunShellScript",
+    Comment: "Provision ecommerce admin once for dev",
+    Parameters: $parameters[0]
+  }' > "${request_file}"
 
 echo "Provisioning admin once on ${INSTANCE_ID}."
 
 COMMAND_ID="$(aws ssm send-command \
-  --instance-ids "${INSTANCE_ID}" \
-  --document-name AWS-RunShellScript \
-  --comment "Provision ecommerce admin once for dev" \
-  --parameters "commands=${command_list}" \
+  --cli-input-json "file://${request_file}" \
   --query 'Command.CommandId' \
   --output text)"
 

@@ -3,7 +3,11 @@ set -euo pipefail
 
 umask 077
 
-dnf install -y docker curl
+# Amazon Linux 2023 may already have curl-minimal. Allow DNF to replace a
+# conflicting package while installing Docker so the bootstrap transaction
+# does not abort before Docker is installed.
+dnf install -y --allowerasing docker
+command -v curl >/dev/null 2>&1 || dnf install -y curl-minimal
 systemctl enable --now docker
 
 if ! command -v amazon-cloudwatch-agent-ctl >/dev/null 2>&1; then

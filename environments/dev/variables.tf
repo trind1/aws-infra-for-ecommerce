@@ -251,7 +251,7 @@ variable "database_engine" {
 variable "database_engine_version" {
   description = "Database engine version for the RDS instance."
   type        = string
-  default     = "16.4"
+  default     = "17.11"
   nullable    = false
 }
 

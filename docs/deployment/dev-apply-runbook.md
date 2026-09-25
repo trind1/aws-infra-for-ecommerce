@@ -56,17 +56,70 @@ Trong `dev`:
 
 ## 1. Chuẩn bị công cụ và quyền AWS
 
-Kiểm tra trên máy deploy:
+### 1.1 AWS account, profile và region
+
+Không hard-code access key/secret key vào repository. Với IAM user, cấu hình AWS CLI
+`default profile` trên máy deploy; Terraform và AWS CLI sẽ tự dùng profile này, không cần
+`export` biến môi trường:
 
 ```bash
+# Nếu dùng IAM user với Access Key/Secret Access Key:
+aws configure
+# Nhập region: us-east-1
+
+# Nếu account dùng AWS SSO thay vì IAM user:
+# aws configure sso
+# aws sso login
+
 terraform version
 aws --version
 docker --version
-aws sts get-caller-identity
+aws sts get-caller-identity --query '{Account:Account,Arn:Arn}' --output table
+aws configure list
+aws ec2 describe-availability-zones \
+  --region us-east-1 \
+  --filters Name=state,Values=available \
+  --query 'AvailabilityZones[*].ZoneName'
 ```
 
-AWS credentials phải có quyền tạo/quản lý VPC, ALB, EC2/ASG, IAM role/profile, RDS,
-S3, CloudFront, ACM import, CloudWatch và SSM.
+`aws configure` sẽ hỏi Access Key ID, Secret Access Key, region và output format; credential
+được lưu trong `~/.aws/credentials`, không nằm trong repository. Nếu anh chỉ có username/password
+để đăng nhập AWS Console mà chưa có access key, CLI chưa dùng được; cần dùng AWS SSO/assumed
+role hoặc tạo access key theo policy của account.
+Nếu account bắt buộc MFA, cần dùng temporary session credentials/assumed role có MFA thay vì
+đưa MFA secret vào Terraform.
+
+Đọc `Account` từ output `aws sts get-caller-identity` và đối chiếu thủ công với account ID đã
+được phê duyệt cho `dev`. Không chạy tiếp nếu account ID sai, region không khớp `aws_region`
+trong `terraform.tfvars`, hoặc hai Availability Zone dự kiến không ở trạng thái `available`.
+Lưu output account/region vào evidence, nhưng không lưu credential/token.
+
+Nếu cần dùng named profile thay vì `default`, có thể cấu hình bằng `aws configure --profile
+<profile-name>` và thêm `--profile <profile-name>` vào từng lệnh AWS CLI. Khi chạy Terraform,
+dùng inline profile cho đúng một lệnh, ví dụ `AWS_PROFILE=<profile-name> terraform -chdir=environments/dev plan`;
+không cần `export`.
+
+### 1.2 Quyền IAM và prerequisite của account
+
+Deploy role/user cần quyền theo các nhóm sau, có thể giới hạn resource/tag theo policy của
+account:
+
+- VPC/EC2: VPC, subnet, route table, internet gateway, security group, AMI/SSM parameter,
+  launch template, instance profile và instance.
+- ELB/Auto Scaling: ALB, listener/rule, target group, ASG, scaling policy và instance refresh.
+- RDS: DB subnet group, PostgreSQL instance, log export và snapshot/backup settings.
+- S3/CloudFront: bucket, bucket policy, public access block, versioning, encryption,
+  CloudFront distribution/OAC và invalidation.
+- ACM: import certificate/key cho ALB test listener.
+- IAM: tạo/tag role, instance profile, attach/put runtime policies và `iam:PassRole` cho
+  EC2. Không cấp rộng hơn policy cần thiết nếu account có deploy role riêng.
+- CloudWatch/SSM: log groups, alarms, `ssm:GetParameter` cho AMI, và quyền SSM cần cho
+  migration/provision admin sau apply.
+
+Account cũng cần kiểm tra trước: service quota EC2/ELB/EIP/RDS, quyền tạo CloudFront
+distribution, billing budget/cost approval và không có SCP/permission boundary chặn các
+service trên. Dev hiện không cần Route 53 resource, NAT Gateway hoặc ECR vì DNS là manual,
+EC2 pull image từ Docker Hub và EC2 nằm public subnet.
 
 Terraform dev hiện dùng local state. Không chạy đồng thời hai lần `plan/apply` trên cùng
 environment và không dùng local state cho team hoặc production.
@@ -316,13 +369,19 @@ shred -u environments/dev/admin-provision.env
 
 ## 10. Build và publish frontend (Cái này chạy bên App repo)
 
-Chạy từ root của app repository, sau khi biết API domain cố định:
+Chạy từ root của app repository, sau khi biết API domain cố định. Đặt hai absolute path này
+một lần trong cùng terminal session:
 
 Build bằng production API origin. Với `dev` hiện tại, origin là
 `https://e-commerce-ndt.test/api`; thay bằng API origin của environment đang deploy nếu
 khác:
 
 ```bash
+export APP_REPO_ROOT="/home/trind1/Work/E-commerce"
+export INFRA_REPO_ROOT="/home/trind1/Work/aws-infra-for-ecommerce"
+
+cd "$APP_REPO_ROOT"
+
 # Ví dụ khi API production là api.example.com:
 # VITE_API_URL=https://api.example.com/api npm run build
 
@@ -333,9 +392,13 @@ test -f apps/web/dist/index.html
 ```
 
 Output build phải là `apps/web/dist`; chỉ upload thư mục này, không upload source hoặc file
-local khác. Chuyển về root infrastructure repository để lấy bucket/distribution từ Terraform:
+local khác. Chuyển về root infrastructure repository để lấy bucket/distribution từ Terraform.
+`terraform -chdir=environments/dev` chỉ đúng khi command được chạy từ
+`$INFRA_REPO_ROOT`:
 
 ```bash
+cd "$INFRA_REPO_ROOT"
+
 BUCKET="$(terraform -chdir=environments/dev output -raw frontend_bucket_id)"
 DIST_ID="$(terraform -chdir=environments/dev output -raw cloudfront_distribution_id)"
 CF_DOMAIN="$(terraform -chdir=environments/dev output -raw cloudfront_domain_name)"
@@ -346,7 +409,7 @@ printf 'Terraform frontend bucket: s3://%s\n' "$BUCKET"
 read -r -p 'Nhập lại chính xác bucket name để xác nhận --delete: ' CONFIRMED_BUCKET
 test "$CONFIRMED_BUCKET" = "$BUCKET"
 
-FRONTEND_DIST="/path/to/app/apps/web/dist"
+FRONTEND_DIST="$APP_REPO_ROOT/apps/web/dist"
 test -f "$FRONTEND_DIST/index.html"
 
 aws s3 sync "$FRONTEND_DIST" "s3://${BUCKET}" \

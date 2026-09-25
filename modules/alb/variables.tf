@@ -87,7 +87,16 @@ variable "idle_timeout" {
 }
 
 locals {
-  name              = "${var.project_name}-${var.environment}"
-  alb_name          = substr(replace(lower("${local.name}-alb"), "/[^a-z0-9-]/", "-"), 0, 32)
-  target_group_name = substr(replace(lower("${local.name}-api-tg"), "/[^a-z0-9-]/", "-"), 0, 32)
+  name = "${var.project_name}-${var.environment}"
+
+  # ALB and target-group names are limited to 32 characters and cannot end
+  # with a hyphen. Truncate the prefix before adding the resource suffix so
+  # the suffix is preserved instead of being cut off by substr().
+  normalized_name = trim(
+    replace(lower(local.name), "/[^a-z0-9-]/", "-"),
+    "-",
+  )
+
+  alb_name          = "${substr(local.normalized_name, 0, 32 - length("-alb"))}-alb"
+  target_group_name = "${substr(local.normalized_name, 0, 32 - length("-api-tg"))}-api-tg"
 }

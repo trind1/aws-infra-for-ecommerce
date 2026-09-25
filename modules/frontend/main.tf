@@ -59,13 +59,13 @@ resource "aws_s3_bucket_ownership_controls" "frontend" {
 
 # ============ FRONTEND BUCKET VERSIONING  ============
 
-resource "aws_s3_bucket_versioning" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
+# resource "aws_s3_bucket_versioning" "frontend" {
+#   bucket = aws_s3_bucket.frontend.id
 
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
+#   versioning_configuration {
+#     status = "Enabled"
+#   }
+# }
 
 # ============ FRONTEND BUCKET ENCRYPTION  ============
 
